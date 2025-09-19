@@ -48,7 +48,6 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [paymentModal, setPaymentModal] = useState(false)
-  const [editModal, setEditModal] = useState(false)
   const [orderEditModal, setOrderEditModal] = useState(false)
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean

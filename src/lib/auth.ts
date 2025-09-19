@@ -72,5 +72,5 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
 
 // Check if store can access data (always true since each store only sees their own data)
 export function canAccessStore(store: IStore, storeId: string): boolean {
-  return (store._id as any).toString() === storeId
+  return String(store._id) === storeId
 }

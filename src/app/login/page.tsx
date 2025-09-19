@@ -115,7 +115,7 @@ export default function LoginPage() {
       } else {
         error(data.message)
       }
-    } catch (err) {
+    } catch {
       error('Error creating store. Please try again.')
     } finally {
       setIsLoading(false)
@@ -190,7 +190,7 @@ export default function LoginPage() {
                   onClick={() => setShowSetup(true)}
                   className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
                 >
-                  Don't have a store? Create one here
+                  Don&apos;t have a store? Create one here
                 </button>
               </div>
             </form>

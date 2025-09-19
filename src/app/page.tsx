@@ -30,7 +30,7 @@ export default function Dashboard() {
         const productsData = await productsRes.json()
         
         const totalProducts = productsData.total || 0
-        const lowStockProducts = productsData.products?.filter((p: any) => p.quantity < 10).length || 0
+        const lowStockProducts = productsData.products?.filter((p: { quantity: number }) => p.quantity < 10).length || 0
 
         // Fetch today's sales
         const today = new Date().toISOString().split('T')[0]
@@ -194,7 +194,7 @@ export default function Dashboard() {
               Welcome to your POS System!
             </h2>
             <p className="text-blue-700 dark:text-blue-300 mb-6 max-w-md mx-auto">
-              It looks like you're getting started. Would you like to add some sample products to explore the features?
+              It looks like you&apos;re getting started. Would you like to add some sample products to explore the features?
             </p>
             <button
               onClick={async () => {
@@ -207,7 +207,7 @@ export default function Dashboard() {
                   } else {
                     error('Error adding sample products: ' + result.message, 'Setup Failed')
                   }
-                } catch (err) {
+                } catch {
                   error('Error adding sample products', 'Setup Failed')
                 }
               }}

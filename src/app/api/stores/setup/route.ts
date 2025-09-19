@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
         username: username // Use the original username instead of from savedStore
       }
     }, { status: 201 })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating store:', error)
     
     if (error.code === 11000) {

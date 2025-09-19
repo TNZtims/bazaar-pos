@@ -10,7 +10,7 @@ export async function POST() {
     response.cookies.delete('auth-token')
     
     return response
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Logout error:', error)
     return NextResponse.json(
       { message: 'Internal server error' },

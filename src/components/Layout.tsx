@@ -14,7 +14,7 @@ interface LayoutProps {
 const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
-  const { theme, toggleTheme, mounted } = useTheme()
+  const { mounted } = useTheme()
   const { store, logout } = useAuth()
   const { success } = useToast()
 

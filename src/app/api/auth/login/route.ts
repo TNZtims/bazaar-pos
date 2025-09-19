@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     
     // Generate token
     const token = generateToken({
-      storeId: (store._id as any).toString(),
+      storeId: String(store._id),
       storeName: store.name,
       username: store.username
     })
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     })
     
     return response
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Login error:', error)
     return NextResponse.json(
       { message: 'Internal server error' },

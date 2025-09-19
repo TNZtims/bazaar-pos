@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
         settings: store.settings
       }
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Auth check error:', error)
     return NextResponse.json(
       { message: 'Internal server error' },

@@ -7,10 +7,10 @@ if (!MONGODB_URI) {
 }
 
 // Global is used here to maintain a cached connection across hot reloads in development
-let cached = (global as any).mongoose
+let cached = (global as { mongoose?: { conn: typeof mongoose | null, promise: Promise<typeof mongoose> | null } }).mongoose
 
 if (!cached) {
-  cached = (global as any).mongoose = { conn: null, promise: null }
+  cached = (global as { mongoose?: { conn: typeof mongoose | null, promise: Promise<typeof mongoose> | null } }).mongoose = { conn: null, promise: null }
 }
 
 async function connectToDatabase() {

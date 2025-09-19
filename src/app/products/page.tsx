@@ -98,7 +98,7 @@ export default function ProductsPage() {
       })
 
       if (response.ok) {
-        const savedProduct = await response.json()
+        await response.json()
         
         setShowModal(false)
         setEditingProduct(null)

@@ -221,7 +221,7 @@ export default function SalesPage() {
     return { subtotal, total }
   }
 
-  const { subtotal, total } = calculateTotals()
+  const { total } = calculateTotals()
 
   const handleCheckout = async () => {
     if (cart.length === 0) {
