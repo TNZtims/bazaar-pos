@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Error creating store:', error)
     
-    if (error.code === 11000) {
+    if (error && typeof error === 'object' && 'code' in error && (error as any).code === 11000) {
       return NextResponse.json(
         { message: 'Username already exists' },
         { status: 400 }
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json(
-      { message: 'Error creating store', error: error.message },
+      { message: 'Error creating store', error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }
