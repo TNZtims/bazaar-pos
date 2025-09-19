@@ -1,0 +1,8 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" fill="#f0fdf4"/>
+  <rect x="60" y="50" width="80" height="100" rx="4" fill="#22c55e" stroke="#16a34a" stroke-width="2"/>
+  <rect x="70" y="60" width="60" height="20" fill="#16a34a"/>
+  <circle cx="100" cy="120" r="15" fill="#dcfce7"/>
+  <text x="100" y="135" text-anchor="middle" fill="#16a34a" font-family="Arial" font-size="10" font-weight="bold">CLEAN</text>
+  <text x="100" y="180" text-anchor="middle" fill="#16a34a" font-family="Arial" font-size="12" font-weight="bold">HOUSEHOLD</text>
+</svg>
