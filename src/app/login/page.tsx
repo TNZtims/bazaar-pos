@@ -11,20 +11,15 @@ export default function LoginPage() {
   const { success, error } = useToast()
   
   const [formData, setFormData] = useState({
-    username: '',
+    storeName: '',
     password: ''
   })
   const [isLoading, setIsLoading] = useState(false)
   const [showSetup, setShowSetup] = useState(false)
   const [setupData, setSetupData] = useState({
     storeName: '',
-    username: '',
     password: '',
-    confirmPassword: '',
-    address: '',
-    phone: '',
-    email: '',
-    description: ''
+    confirmPassword: ''
   })
 
   // Redirect if already authenticated
@@ -37,14 +32,14 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!formData.username || !formData.password) {
+    if (!formData.storeName || !formData.password) {
       error('Please fill in all fields')
       return
     }
-
+    
     setIsLoading(true)
     
-    const result = await login(formData.username, formData.password)
+    const result = await login(formData.storeName, formData.password)
     
     setIsLoading(false)
     
@@ -59,7 +54,7 @@ export default function LoginPage() {
   const handleSetup = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!setupData.storeName || !setupData.username || !setupData.password) {
+    if (!setupData.storeName || !setupData.password) {
       error('Please fill in all required fields')
       return
     }
@@ -84,12 +79,7 @@ export default function LoginPage() {
         },
         body: JSON.stringify({
           storeName: setupData.storeName,
-          username: setupData.username,
-          password: setupData.password,
-          address: setupData.address,
-          phone: setupData.phone,
-          email: setupData.email,
-          description: setupData.description
+          password: setupData.password
         })
       })
 
@@ -99,18 +89,13 @@ export default function LoginPage() {
         success('Store created successfully! You can now login.')
         setShowSetup(false)
         setFormData({
-          username: setupData.username,
+          storeName: setupData.storeName,
           password: ''
         })
         setSetupData({
           storeName: '',
-          username: '',
           password: '',
-          confirmPassword: '',
-          address: '',
-          phone: '',
-          email: '',
-          description: ''
+          confirmPassword: ''
         })
       } else {
         error(data.message)
@@ -134,8 +119,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4 py-8">
+      <div className="max-w-md w-full space-y-6 sm:space-y-8">
         <div className="text-center">
           <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">
             🏪 POS System
@@ -145,20 +130,20 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl p-8 border border-slate-200 dark:border-slate-700">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700">
           {!showSetup ? (
             <form onSubmit={handleLogin} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Store Username
+                  Store Name
                 </label>
                 <input
                   type="text"
                   required
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  value={formData.storeName}
+                  onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
                   className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter your store username"
+                  placeholder="Enter your store name"
                 />
               </div>
 
@@ -210,33 +195,6 @@ export default function LoginPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Username *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={setupData.username}
-                    onChange={(e) => setSetupData({ ...setupData, username: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="storeuser"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={setupData.email}
-                    onChange={(e) => setSetupData({ ...setupData, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="store@example.com"
-                  />
-                </div>
-              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -267,31 +225,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Address
-                </label>
-                <input
-                  type="text"
-                  value={setupData.address}
-                  onChange={(e) => setSetupData({ ...setupData, address: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="123 Main St, City"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Phone
-                </label>
-                <input
-                  type="text"
-                  value={setupData.phone}
-                  onChange={(e) => setSetupData({ ...setupData, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="+63 123 456 7890"
-                />
-              </div>
 
               <div className="flex space-x-3 pt-4">
                 <button

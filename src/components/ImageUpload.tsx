@@ -24,6 +24,7 @@ export default function ImageUpload({
 }: ImageUploadProps) {
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>({ uploading: false, progress: 0 })
   const [showCamera, setShowCamera] = useState(false)
+  const [cameraLoading, setCameraLoading] = useState(false)
   const [s3Config, setS3Config] = useState<any>(null)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -34,6 +35,15 @@ export default function ImageUpload({
   // Check S3 configuration on component mount
   useEffect(() => {
     checkS3Config()
+  }, [])
+
+  // Cleanup camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+      }
+    }
   }, [])
 
   const checkS3Config = async () => {
@@ -127,29 +137,91 @@ export default function ImageUpload({
     }
   }
 
+  // Check if camera is available
+  const isCameraAvailable = () => {
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+  }
+
   // Start camera
   const startCamera = async () => {
+    setCameraLoading(true)
+    setUploadStatus({ uploading: false, progress: 0 }) // Clear any previous errors
+    
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
+      // Check if camera is available
+      if (!isCameraAvailable()) {
+        throw new Error('Camera not available on this device')
+      }
+
+      // Request camera permission and stream
+      let constraints = {
+        video: {
           facingMode: 'environment', // Prefer back camera
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      })
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 }
+        }
+      }
+
+      let stream: MediaStream
+      try {
+        // Try with preferred constraints first
+        stream = await navigator.mediaDevices.getUserMedia(constraints)
+      } catch (error) {
+        console.warn('Failed with preferred constraints, trying fallback:', error)
+        // Fallback to basic constraints
+        constraints = {
+          video: true
+        } as any
+        stream = await navigator.mediaDevices.getUserMedia(constraints)
+      }
       
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
+        
+        // Wait for video to load before showing camera
+        videoRef.current.onloadedmetadata = () => {
+          if (videoRef.current) {
+            videoRef.current.play()
+            setShowCamera(true)
+            setCameraLoading(false)
+          }
+        }
+
+        // Handle video errors
+        videoRef.current.onerror = (error) => {
+          console.error('Video error:', error)
+          setUploadStatus({ 
+            uploading: false, 
+            progress: 0, 
+            error: 'Failed to load camera video stream.' 
+          })
+          setCameraLoading(false)
+          stopCamera()
+        }
       }
-      setShowCamera(true)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to start camera:', error)
+      let errorMessage = 'Failed to access camera. '
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage += 'Please allow camera permissions and try again.'
+      } else if (error.name === 'NotFoundError') {
+        errorMessage += 'No camera found on this device.'
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage += 'Camera not supported on this device.'
+      } else if (error.message.includes('not available')) {
+        errorMessage += 'Camera not available on this device.'
+      } else {
+        errorMessage += 'Please check camera permissions and try again.'
+      }
+      
       setUploadStatus({ 
         uploading: false, 
         progress: 0, 
-        error: 'Failed to access camera. Please check permissions.' 
+        error: errorMessage 
       })
+      setCameraLoading(false)
     }
   }
 
@@ -160,6 +232,7 @@ export default function ImageUpload({
       streamRef.current = null
     }
     setShowCamera(false)
+    setCameraLoading(false)
   }
 
   // Capture photo from camera
@@ -253,14 +326,19 @@ export default function ImageUpload({
           <button
             type="button"
             onClick={startCamera}
-            disabled={disabled || uploadStatus.uploading}
+            disabled={disabled || uploadStatus.uploading || !isCameraAvailable() || cameraLoading}
             className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors"
+            title={!isCameraAvailable() ? 'Camera not available on this device' : 'Take a photo using your camera'}
           >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Take Photo
+            {cameraLoading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+            ) : (
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            )}
+            {cameraLoading ? 'Starting Camera...' : (isCameraAvailable() ? 'Take Photo' : 'Camera N/A')}
           </button>
         </div>
       )}
@@ -273,8 +351,22 @@ export default function ImageUpload({
               ref={videoRef}
               autoPlay
               playsInline
+              muted
+              controls={false}
               className="w-full max-w-md aspect-video object-cover"
+              style={{ transform: 'scaleX(-1)' }} // Mirror for selfie-like experience
             />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-32 sm:w-48 h-32 sm:h-48 border-2 border-white border-dashed rounded-lg opacity-50"></div>
+            </div>
+            {cameraLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+                <div className="text-white text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
+                  <p className="text-sm">Starting camera...</p>
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="flex gap-2">

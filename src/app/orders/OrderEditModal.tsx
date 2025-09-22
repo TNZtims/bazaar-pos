@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useToast } from '@/contexts/ToastContext'
+import Modal from '@/components/Modal'
 
 interface Product {
   _id: string
@@ -234,26 +235,15 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
   if (!isOpen || !order) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
-        <div className="p-6 border-b border-gray-200 dark:border-slate-700">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
-              Edit Order #{order._id.slice(-6)}
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          
-          {/* Tabs */}
-          <div className="mt-4 border-b border-gray-200 dark:border-slate-600">
-            <div className="flex space-x-8">
+    <Modal 
+      isOpen={isOpen} 
+      onClose={onClose} 
+      title={`Edit Order #${order._id.slice(-6)}`}
+      size="xl"
+    >
+      {/* Tabs */}
+      <div className="border-b border-gray-200 dark:border-slate-600 -mt-2 mb-6">
+        <div className="flex space-x-8">
               <button
                 onClick={() => setActiveTab('items')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
@@ -276,9 +266,8 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
               </button>
             </div>
           </div>
-        </div>
 
-        <div className="p-3 sm:p-6 overflow-y-auto max-h-[calc(95vh-120px)] sm:max-h-[calc(90vh-200px)]">
+        <div>
           {activeTab === 'items' ? (
             <div className="flex flex-col lg:grid lg:grid-cols-2 gap-4 lg:gap-6">
               {/* Products */}
@@ -504,7 +493,6 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

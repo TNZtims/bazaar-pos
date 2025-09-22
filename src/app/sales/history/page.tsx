@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Layout from '@/components/Layout'
+import Modal from '@/components/Modal'
 
 interface SaleItem {
   productName: string
@@ -19,7 +20,7 @@ interface Sale {
   paymentMethod: 'cash' | 'card' | 'digital'
   customerName?: string
   notes?: string
-  createdAt: string
+  createdAt?: string | null
   items: SaleItem[]
 }
 
@@ -70,14 +71,20 @@ export default function SalesHistoryPage() {
     }
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return 'N/A'
+    
+    try {
+      return new Date(dateString).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    } catch (error) {
+      return 'Invalid Date'
+    }
   }
 
   const formatCurrency = (amount: number | undefined | null) => {
@@ -87,7 +94,7 @@ export default function SalesHistoryPage() {
     return `₱${amount.toFixed(2)}`
   }
 
-  const getPaymentMethodColor = (method: string) => {
+  const getPaymentMethodColor = (method: string | undefined) => {
     switch (method) {
       case 'cash':
         return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
@@ -369,43 +376,33 @@ export default function SalesHistoryPage() {
         </div>
 
         {/* Sale Details Modal */}
-        {selectedSale && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Sale Details</h3>
-                  <button
-                    onClick={() => setSelectedSale(null)}
-                    className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer"
-                  >
-                    <span className="sr-only">Close</span>
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+        <Modal
+          isOpen={!!selectedSale}
+          onClose={() => setSelectedSale(null)}
+          title="Sale Details"
+          size="lg"
+        >
 
                 <div className="space-y-4">
                   {/* Sale Info */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Date & Time</label>
-                      <p className="text-sm text-gray-900 dark:text-slate-100">{formatDate(selectedSale.createdAt)}</p>
+                      <p className="text-sm text-gray-900 dark:text-slate-100">{formatDate(selectedSale?.createdAt)}</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Customer</label>
-                      <p className="text-sm text-gray-900 dark:text-slate-100">{selectedSale.customerName || 'Walk-in Customer'}</p>
+                      <p className="text-sm text-gray-900 dark:text-slate-100">{selectedSale?.customerName || 'Walk-in Customer'}</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Payment Method</label>
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPaymentMethodColor(selectedSale.paymentMethod)}`}>
-                        {selectedSale.paymentMethod}
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPaymentMethodColor(selectedSale?.paymentMethod)}`}>
+                        {selectedSale?.paymentMethod}
                       </span>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Sale ID</label>
-                      <p className="text-sm text-gray-900 dark:text-slate-100 font-mono">{selectedSale._id.slice(-8)}</p>
+                      <p className="text-sm text-gray-900 dark:text-slate-100 font-mono">{selectedSale?._id?.slice(-8)}</p>
                     </div>
                   </div>
 
@@ -423,7 +420,7 @@ export default function SalesHistoryPage() {
                           </tr>
                         </thead>
                         <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
-                          {selectedSale.items.map((item, index) => (
+                          {selectedSale?.items?.map((item, index) => (
                             <tr key={index}>
                               <td className="px-4 py-2 text-sm text-gray-900 dark:text-slate-100">{item.productName}</td>
                               <td className="px-4 py-2 text-sm text-gray-900 dark:text-slate-100">{item.quantity}</td>
@@ -440,27 +437,27 @@ export default function SalesHistoryPage() {
                   <div className="border-t border-gray-200 dark:border-slate-600 pt-4 space-y-2">
                     <div className="flex justify-between text-sm text-gray-900 dark:text-slate-100">
                       <span>Subtotal:</span>
-                      <span>{formatCurrency(selectedSale.subtotal)}</span>
+                      <span>{formatCurrency(selectedSale?.subtotal)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-gray-900 dark:text-slate-100">
                       <span>Tax:</span>
-                      <span>{formatCurrency(selectedSale.tax)}</span>
+                      <span>{formatCurrency(selectedSale?.tax)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-gray-900 dark:text-slate-100">
                       <span>Discount:</span>
-                      <span>-{formatCurrency(selectedSale.discount)}</span>
+                      <span>-{formatCurrency(selectedSale?.discount)}</span>
                     </div>
                     <div className="flex justify-between text-lg font-semibold border-t border-gray-200 dark:border-slate-600 pt-2 text-gray-900 dark:text-slate-100">
                       <span>Total:</span>
-                      <span>{formatCurrency(selectedSale.finalAmount)}</span>
+                      <span>{formatCurrency(selectedSale?.finalAmount)}</span>
                     </div>
                   </div>
 
                   {/* Notes */}
-                  {selectedSale.notes && (
+                  {selectedSale?.notes && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Notes</label>
-                      <p className="text-sm text-gray-900 dark:text-slate-100 bg-gray-50 dark:bg-slate-700 p-3 rounded-md">{selectedSale.notes}</p>
+                      <p className="text-sm text-gray-900 dark:text-slate-100 bg-gray-50 dark:bg-slate-700 p-3 rounded-md">{selectedSale?.notes}</p>
                     </div>
                   )}
                 </div>
@@ -473,10 +470,7 @@ export default function SalesHistoryPage() {
                     Close
                   </button>
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
+        </Modal>
       </div>
     </Layout>
   )

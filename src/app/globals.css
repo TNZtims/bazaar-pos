@@ -205,6 +205,149 @@ input:disabled {
   cursor: not-allowed;
 }
 
+/* Viewport and modal fixes */
+html, body {
+  height: 100%;
+  overflow-x: hidden;
+}
+
+/* Ensure modals and overlays can use full viewport */
+#__next {
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Modal and overlay utilities */
+.modal-open {
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* Mobile viewport fix */
+@supports (-webkit-touch-callout: none) {
+  .min-h-screen {
+    min-height: -webkit-fill-available;
+  }
+}
+
+/* Safe area for mobile devices */
+@supports (padding: max(0px)) {
+  .safe-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+  
+  .safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  
+  .safe-left {
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+  
+  .safe-right {
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
+
+/* Responsive modal heights */
+@media (max-height: 600px) {
+  .modal-content {
+    max-height: 85vh !important;
+  }
+}
+
+@media (max-height: 500px) {
+  .modal-content {
+    max-height: 90vh !important;
+  }
+}
+
+/* Touch-friendly modal interactions */
+@media (hover: none) and (pointer: coarse) {
+  .modal-overlay {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  .modal-close-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Better button sizes for touch */
+  button {
+    min-height: 44px;
+  }
+  
+  /* Larger input fields on mobile */
+  input, select, textarea {
+    min-height: 44px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
+/* Form improvements */
+.form-input {
+  @apply w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md 
+         bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100
+         focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
+         transition-colors;
+}
+
+.form-label {
+  @apply block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1;
+}
+
+.form-group {
+  @apply mb-4;
+}
+
+/* Responsive table improvements */
+@media (max-width: 640px) {
+  .table-responsive {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .table-responsive table {
+    white-space: nowrap;
+    min-width: 600px;
+  }
+}
+
+/* Large content containers */
+.large-content {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Scrollable areas */
+.scrollable {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) var(--muted);
+}
+
+.scrollable::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollable::-webkit-scrollbar-track {
+  background: var(--muted);
+  border-radius: 3px;
+}
+
+.scrollable::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border-radius: 3px;
+}
+
+.scrollable::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground);
+}
+
 /* Force dark mode everywhere */
 html {
   color-scheme: dark;

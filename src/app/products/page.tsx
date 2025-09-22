@@ -6,13 +6,17 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import ImageUpload from '@/components/ImageUpload'
 import { deleteImageFromS3 } from '@/lib/s3'
 import { useToast } from '@/contexts/ToastContext'
+import { ConfirmationModal } from '@/components/Modal'
 
 interface Product {
   _id: string
   name: string
   cost?: number
   price: number
-  quantity: number
+  quantity: number           // Legacy field
+  totalQuantity: number      // Total stock
+  availableQuantity: number  // Available for sale
+  reservedQuantity: number   // Reserved for pending orders
   description?: string
   category?: string
   sku?: string
@@ -49,7 +53,7 @@ export default function ProductsPage() {
     name: '',
     cost: '',
     price: '',
-    quantity: '',
+    quantity: '',  // We'll still use this field name for backward compatibility 
     description: '',
     category: '',
     sku: '',
@@ -84,7 +88,7 @@ export default function ProductsPage() {
         ...formData,
         cost: formData.cost && formData.cost.trim() !== '' ? parseFloat(formData.cost) : null,
         price: parseFloat(formData.price),
-        quantity: parseInt(formData.quantity)
+        totalQuantity: parseInt(formData.quantity)  // Send as totalQuantity to the API
       }
       
 
@@ -123,7 +127,7 @@ export default function ProductsPage() {
       name: product.name,
       cost: product.cost ? product.cost.toString() : '',
       price: product.price.toString(),
-      quantity: product.quantity.toString(),
+      quantity: (product.totalQuantity || product.quantity).toString(),  // Use totalQuantity if available, fallback to legacy quantity
       description: product.description || '',
       category: product.category || '',
       sku: product.sku || '',
@@ -161,7 +165,7 @@ export default function ProductsPage() {
 
     showConfirmation(
       'Delete Product',
-      `Are you sure you want to delete "${product.name}"?\n\nPrice: ₱${product.price.toFixed(2)}\nStock: ${product.quantity} units\n\nThis action cannot be undone.`,
+      `Are you sure you want to delete "${product.name}"?\n\nPrice: ₱${product.price.toFixed(2)}\nStock: ${product.availableQuantity !== undefined ? product.availableQuantity : product.quantity} available${product.totalQuantity !== undefined ? ` (${product.totalQuantity} total, ${product.reservedQuantity || 0} reserved)` : ' units'}\n\nThis action cannot be undone.`,
       async () => {
         try {
           // Delete from database first
@@ -246,7 +250,7 @@ export default function ProductsPage() {
   return (
     <ProtectedRoute>
       <Layout>
-        <div className="space-y-6">
+        <div className="space-y-6 px-4 sm:px-0">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -273,7 +277,7 @@ export default function ProductsPage() {
         </div>
 
         {/* Products Grid */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 max-h-[70vh] overflow-auto">
           {loading ? (
             <div className="p-8 text-center text-gray-600 dark:text-slate-400">Loading...</div>
           ) : products.length === 0 ? (
@@ -283,29 +287,29 @@ export default function ProductsPage() {
           ) : (
             <>
               {/* Desktop Table */}
-              <div className="hidden md:block overflow-x-auto">
+              <div className="hidden md:block">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
                 <thead className="bg-gray-50 dark:bg-slate-700">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Image
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Product
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Cost
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Price
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Profit
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Stock
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Category
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
@@ -357,13 +361,20 @@ export default function ProductsPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          product.quantity < 10 
-                            ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' 
-                            : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
-                        }`}>
-                          {product.quantity}
-                        </span>
+                        <div className="text-sm">
+                          <div className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            (product.availableQuantity || product.quantity) < 10 
+                              ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' 
+                              : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                          }`}>
+                            {product.availableQuantity !== undefined ? product.availableQuantity : product.quantity} Available
+                          </div>
+                          {product.totalQuantity !== undefined && (
+                            <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                              Total: {product.totalQuantity}, Reserved: {product.reservedQuantity || 0}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                         {product.category || '-'}
@@ -427,13 +438,20 @@ export default function ProductsPage() {
                       </div>
                       <div>
                         <span className="text-gray-500 dark:text-slate-400">Stock:</span>
-                        <span className={`ml-1 font-medium ${
-                          product.quantity > 10 ? 'text-green-600 dark:text-green-400' :
-                          product.quantity > 0 ? 'text-yellow-600 dark:text-yellow-400' :
-                          'text-red-600 dark:text-red-400'
-                        }`}>
-                          {product.quantity}
-                        </span>
+                        <div className="ml-1">
+                          <span className={`font-medium ${
+                            (product.availableQuantity || product.quantity) > 10 ? 'text-green-600 dark:text-green-400' :
+                            (product.availableQuantity || product.quantity) > 0 ? 'text-yellow-600 dark:text-yellow-400' :
+                            'text-red-600 dark:text-red-400'
+                          }`}>
+                            {product.availableQuantity !== undefined ? product.availableQuantity : product.quantity} Available
+                          </span>
+                          {product.totalQuantity !== undefined && (
+                            <div className="text-xs text-gray-500 dark:text-slate-400">
+                              Total: {product.totalQuantity} | Reserved: {product.reservedQuantity || 0}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -467,7 +485,7 @@ export default function ProductsPage() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-lg max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
+          <div className="backdrop-blur-md bg-white/95 dark:bg-slate-900/95 rounded-xl max-w-md w-full p-6 border border-slate-200/50 dark:border-slate-700/50 shadow-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">
               {editingProduct ? 'Edit Product' : 'Add Product'}
             </h2>
@@ -618,55 +636,16 @@ export default function ProductsPage() {
       )}
 
       {/* Confirmation Modal */}
-      {confirmModal.isOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[200]">
-          <div className="bg-white dark:bg-slate-800 rounded-lg max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center mb-4">
-              <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-                confirmModal.type === 'danger' ? 'bg-red-100 dark:bg-red-900/30' : 'bg-yellow-100 dark:bg-yellow-900/30'
-              }`}>
-                {confirmModal.type === 'danger' ? (
-                  <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.732 15.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                ) : (
-                  <svg className="w-6 h-6 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.732 15.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                )}
-              </div>
-              <div className="ml-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
-                  {confirmModal.title}
-                </h3>
-              </div>
-            </div>
-            <div className="mb-6">
-              <p className="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-line">
-                {confirmModal.message}
-              </p>
-            </div>
-            <div className="flex justify-end space-x-3 pt-4">
-              <button
-                onClick={closeConfirmation}
-                className="px-4 py-2 text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors"
-              >
-                {confirmModal.cancelText}
-              </button>
-              <button
-                onClick={confirmModal.onConfirm}
-                className={`px-4 py-2 text-white rounded-md transition-colors ${
-                  confirmModal.type === 'danger' 
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : 'bg-yellow-600 hover:bg-yellow-700'
-                }`}
-              >
-                {confirmModal.confirmText}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={closeConfirmation}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+      />
     </Layout>
     </ProtectedRoute>
   )

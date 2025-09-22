@@ -41,6 +41,12 @@ A complete Point of Sale (POS) system built with **pure Next.js** using Server-S
 - ✅ Adaptive layouts for all screen sizes
 - ✅ Touch-friendly interface
 
+### 🔐 **Admin Management**
+- ✅ Admin store privileges for system management
+- ✅ Admin-only store creation
+- ✅ Role-based access control
+- ✅ Secure authentication with admin status
+
 ## 🏗️ **Project Structure**
 
 ```
@@ -107,9 +113,24 @@ my-pos/
 
 ### 🌱 **Initial Setup**
 
-1. **Open the dashboard** at http://localhost:3000
-2. **Click "Add Sample Products"** to populate the database with sample data
-3. **Start using the POS system!**
+1. **Create the first admin store**:
+   ```bash
+   # Create admin with custom credentials
+   ADMIN_USERNAME="youradmin" ADMIN_PASSWORD="securepass123" node scripts/create-admin-store.js
+   
+   # Or use defaults (admin/admin123)
+   node scripts/create-admin-store.js
+   ```
+
+2. **Open the dashboard** at http://localhost:3000
+
+3. **Login with admin credentials** and create your first store
+
+4. **Click "Add Sample Products"** to populate the database with sample data
+
+5. **Start using the POS system!**
+
+> **Note**: Store creation is now admin-only. You must create an admin store first using the script above.
 
 ## 📋 **API Endpoints**
 
@@ -128,6 +149,12 @@ my-pos/
 - `GET /api/reports/daily?date=YYYY-MM-DD` - Daily sales report
 - `GET /api/reports/top-products` - Top selling products
 - `GET /api/reports/profit?period=30&startDate=&endDate=` - Profit analytics
+
+### Authentication & Admin
+- `POST /api/auth/login` - Login and get JWT token
+- `GET /api/auth/me` - Get current store info
+- `POST /api/auth/logout` - Logout
+- `POST /api/stores/setup` - Create new store (admin only)
 
 ### Utilities
 - `POST /api/seed` - Seed database with sample products

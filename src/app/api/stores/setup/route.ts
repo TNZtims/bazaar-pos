@@ -2,27 +2,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectToDatabase from '@/lib/mongodb'
 import Store from '@/models/Store'
 import bcrypt from 'bcryptjs'
+import { authenticateAdminRequest } from '@/lib/auth'
 
-// POST /api/stores/setup - Create new store (public route for initial setup)
+// POST /api/stores/setup - Create new store (admin only)
 export async function POST(request: NextRequest) {
   try {
+    // Check if user is authenticated and has admin privileges
+    const authContext = await authenticateAdminRequest(request)
+    
+    if (!authContext) {
+      return NextResponse.json(
+        { message: 'Admin access required to create stores' },
+        { status: 403 }
+      )
+    }
+    
     await connectToDatabase()
     
     const body = await request.json()
     const { 
       storeName, 
-      username, 
       password,
-      address,
-      phone,
-      email,
-      description
+      isAdmin = false,
+      cashiers = []
     } = body
     
     // Validation
-    if (!storeName || !username || !password) {
+    if (!storeName || !password) {
       return NextResponse.json(
-        { message: 'Store name, username, and password are required' },
+        { message: 'Store name and password are required' },
         { status: 400 }
       )
     }
@@ -34,11 +42,11 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Check if username already exists
-    const existingStore = await Store.findOne({ username })
+    // Check if store name already exists
+    const existingStore = await Store.findOne({ storeName })
     if (existingStore) {
       return NextResponse.json(
-        { message: 'Username already exists' },
+        { message: 'Store name already exists' },
         { status: 400 }
       )
     }
@@ -49,27 +57,11 @@ export async function POST(request: NextRequest) {
     
     // Create store
     const store = new Store({
-      name: storeName,
-      address,
-      phone,
-      email,
-      description,
-      username,
+      storeName,
       password: hashedPassword,
-      settings: {
-        currency: 'PHP',
-        taxRate: 0,
-        timezone: 'Asia/Manila',
-        businessHours: {
-          open: '09:00',
-          close: '18:00',
-          days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-        }
-      },
-      subscription: {
-        plan: 'basic',
-        status: 'active'
-      }
+      isAdmin,
+      isActive: true,
+      cashiers: Array.isArray(cashiers) ? cashiers : []
     })
     
     const savedStore = await store.save()
@@ -78,8 +70,9 @@ export async function POST(request: NextRequest) {
       message: 'Store created successfully',
       store: {
         id: savedStore._id,
-        name: savedStore.name,
-        username: username // Use the original username instead of from savedStore
+        storeName: savedStore.storeName,
+        isAdmin: savedStore.isAdmin,
+        cashiers: savedStore.cashiers
       }
     }, { status: 201 })
   } catch (error: unknown) {
@@ -87,7 +80,7 @@ export async function POST(request: NextRequest) {
     
     if (error && typeof error === 'object' && 'code' in error && (error as any).code === 11000) {
       return NextResponse.json(
-        { message: 'Username already exists' },
+        { message: 'Store name already exists' },
         { status: 400 }
       )
     }

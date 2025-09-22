@@ -4,26 +4,18 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 
 interface Store {
   id: string
-  name: string
-  username: string
-  settings: {
-    currency: string
-    taxRate: number
-    timezone: string
-    businessHours?: {
-      open: string
-      close: string
-      days: string[]
-    }
-  }
+  storeName: string
+  isAdmin: boolean
+  cashiers: string[]
 }
 
 interface AuthContextType {
   store: Store | null
-  login: (username: string, password: string) => Promise<{ success: boolean; message: string }>
+  login: (storeName: string, password: string) => Promise<{ success: boolean; message: string }>
   logout: () => Promise<void>
   loading: boolean
   isAuthenticated: boolean
+  isAdmin: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -66,14 +58,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   }
 
-  const login = async (username: string, password: string) => {
+  const login = async (storeName: string, password: string) => {
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ storeName, password }),
         credentials: 'include'
       })
 
@@ -109,7 +101,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     login,
     logout,
     loading,
-    isAuthenticated: !!store
+    isAuthenticated: !!store,
+    isAdmin: store?.isAdmin || false
   }
 
   return (

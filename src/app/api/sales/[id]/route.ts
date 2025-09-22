@@ -77,7 +77,7 @@ export async function PUT(
 
 // Handle adding payment to existing sale
 async function handleAddPayment(sale: any, paymentData: any) {
-  const { amount, method, notes } = paymentData
+  const { amount, method, notes, cashier } = paymentData
   
   if (!amount || amount <= 0) {
     return NextResponse.json(
@@ -98,16 +98,29 @@ async function handleAddPayment(sale: any, paymentData: any) {
     amount,
     method,
     date: new Date(),
-    notes
+    notes,
+    cashier
   })
   
   // Update payment status
   sale.amountPaid += amount
   sale.amountDue -= amount
   
+  // Update cashier field if provided
+  if (cashier) {
+    sale.cashier = cashier
+  }
+  
   if (sale.amountDue <= 0) {
     sale.paymentStatus = 'paid'
+    const wasCompleted = sale.status === 'completed'
     sale.status = 'completed'
+    
+    // Mark order as approved when fully paid (quantities already deducted)
+    if (!wasCompleted && sale.approvalStatus === 'pending') {
+      sale.approvalStatus = 'approved'
+      // Note: Quantities were already deducted when order was created
+    }
   } else {
     sale.paymentStatus = 'partial'
   }
@@ -358,11 +371,11 @@ async function handleCancelSale(sale: any) {
     )
   }
   
-  // Restore product quantities
+  // Restore product quantities (since all orders immediately reduce quantities)
   for (const item of sale.items) {
     await Product.findByIdAndUpdate(
       item.product,
-      { $inc: { quantity: item.quantity } }
+      { $inc: { totalQuantity: item.quantity } }
     )
   }
   

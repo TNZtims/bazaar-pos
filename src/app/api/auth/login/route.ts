@@ -7,18 +7,18 @@ export async function POST(request: NextRequest) {
   try {
     await connectToDatabase()
     
-    const { username, password } = await request.json()
+    const { storeName, password } = await request.json()
     
     // Validation
-    if (!username || !password) {
+    if (!storeName || !password) {
       return NextResponse.json(
-        { message: 'Username and password are required' },
+        { message: 'Store name and password are required' },
         { status: 400 }
       )
     }
     
-    // Find store by username
-    const store = await Store.findOne({ username })
+    // Find store by store name
+    const store = await Store.findOne({ storeName })
     
     if (!store || !store.isActive) {
       return NextResponse.json(
@@ -37,19 +37,11 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Check subscription status
-    if (store.subscription.status !== 'active') {
-      return NextResponse.json(
-        { message: 'Store subscription is not active' },
-        { status: 403 }
-      )
-    }
-    
     // Generate token
     const token = generateToken({
       storeId: String(store._id),
-      storeName: store.name,
-      username: store.username
+      storeName: store.storeName,
+      isAdmin: store.isAdmin
     })
     
     // Create response
@@ -57,9 +49,9 @@ export async function POST(request: NextRequest) {
       message: 'Login successful',
       store: {
         id: store._id,
-        name: store.name,
-        username: store.username,
-        settings: store.settings
+        storeName: store.storeName,
+        isAdmin: store.isAdmin,
+        cashiers: store.cashiers
       }
     })
     

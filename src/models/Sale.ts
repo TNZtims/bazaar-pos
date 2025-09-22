@@ -31,8 +31,14 @@ export interface ISale extends Document {
   customerName?: string
   customerPhone?: string
   customerEmail?: string
+  customerId?: mongoose.Types.ObjectId // Reference to User for customer orders
+  customerCustomId?: string // The customer's custom ID
   notes?: string
-  status: 'active' | 'completed' | 'cancelled' | 'refunded'
+  status: 'pending' | 'approved' | 'paid' | 'partial' | 'completed' | 'cancelled' | 'refunded'
+  approvalStatus: 'pending' | 'approved' | 'rejected'
+  approvedBy?: string // Cashier name who approved
+  approvedAt?: Date
+  cashier?: string // Cashier who processed the sale
   storeId: mongoose.Types.ObjectId
   createdBy?: mongoose.Types.ObjectId
   modificationHistory?: Array<{
@@ -156,6 +162,14 @@ const saleSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  customerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  customerCustomId: {
+    type: String,
+    trim: true
+  },
   notes: {
     type: String,
     trim: true,
@@ -163,8 +177,24 @@ const saleSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'completed', 'cancelled', 'refunded'],
-    default: 'active'
+    enum: ['pending', 'approved', 'paid', 'partial', 'completed', 'cancelled', 'refunded'],
+    default: 'pending'
+  },
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  },
+  approvedBy: {
+    type: String,
+    trim: true
+  },
+  approvedAt: {
+    type: Date
+  },
+  cashier: {
+    type: String,
+    trim: true
   },
   storeId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -205,6 +235,10 @@ saleSchema.index({ storeId: 1 })
 saleSchema.index({ storeId: 1, createdAt: -1 })
 saleSchema.index({ storeId: 1, paymentStatus: 1 })
 saleSchema.index({ status: 1 })
+saleSchema.index({ approvalStatus: 1 })
+saleSchema.index({ storeId: 1, approvalStatus: 1 })
+saleSchema.index({ customerId: 1 })
+saleSchema.index({ customerCustomId: 1 })
 saleSchema.index({ dueDate: 1 })
 saleSchema.index({ customerName: 1 })
 

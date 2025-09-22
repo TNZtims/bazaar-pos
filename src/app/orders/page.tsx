@@ -5,6 +5,8 @@ import Layout from '@/components/Layout'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import OrderEditModal from './OrderEditModal'
 import { useToast } from '@/contexts/ToastContext'
+import { useAuth } from '@/contexts/AuthContext'
+import { ConfirmationModal } from '@/components/Modal'
 
 interface SaleItem {
   productName: string
@@ -36,6 +38,7 @@ interface Order {
   customerPhone?: string
   customerEmail?: string
   notes?: string
+  cashier?: string
   status: 'active' | 'completed' | 'cancelled' | 'refunded'
   createdAt: string
   items: SaleItem[]
@@ -43,9 +46,11 @@ interface Order {
 
 export default function OrdersPage() {
   const { success, error } = useToast()
+  const { store } = useAuth()
   const [orders, setOrders] = useState<Order[]>([])
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
+  const [paymentLoading, setPaymentLoading] = useState(false)
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [paymentModal, setPaymentModal] = useState(false)
   const [orderEditModal, setOrderEditModal] = useState(false)
@@ -70,7 +75,8 @@ export default function OrdersPage() {
   const [paymentData, setPaymentData] = useState({
     amount: 0,
     method: 'cash' as 'cash' | 'card' | 'digital',
-    notes: ''
+    notes: '',
+    cashier: ''
   })
 
   useEffect(() => {
@@ -134,8 +140,14 @@ export default function OrdersPage() {
   }
 
   const handleAddPayment = async () => {
-    if (!selectedOrder || paymentData.amount <= 0) return
+    if (!selectedOrder || paymentData.amount <= 0 || paymentLoading) return
 
+    if (!paymentData.cashier.trim()) {
+      error('Please select a cashier for this payment', 'Cashier Required')
+      return
+    }
+
+    setPaymentLoading(true)
     try {
       const response = await fetch(`/api/sales/${selectedOrder._id}`, {
         method: 'PUT',
@@ -149,7 +161,7 @@ export default function OrdersPage() {
       if (response.ok) {
         success('Payment added successfully!', 'Payment Added')
         setPaymentModal(false)
-        setPaymentData({ amount: 0, method: 'cash', notes: '' })
+        setPaymentData({ amount: 0, method: 'cash', notes: '', cashier: '' })
         fetchOrders()
       } else {
         const errorData = await response.json()
@@ -158,6 +170,8 @@ export default function OrdersPage() {
     } catch (err) {
       console.error('Error adding payment:', err)
       error('Error adding payment', 'Payment Failed')
+    } finally {
+      setPaymentLoading(false)
     }
   }
 
@@ -246,7 +260,7 @@ export default function OrdersPage() {
   return (
     <ProtectedRoute>
       <Layout>
-        <div className="space-y-6">
+        <div className="space-y-6 px-4 sm:px-0">
           {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -270,7 +284,7 @@ export default function OrdersPage() {
         </div>
 
         {/* Orders Table */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 max-h-[70vh] overflow-auto">
           {loading ? (
             <div className="p-8 text-center text-gray-600 dark:text-slate-400">Loading orders...</div>
           ) : orders.length === 0 ? (
@@ -280,7 +294,7 @@ export default function OrdersPage() {
           ) : (
             <>
               {/* Desktop Table */}
-              <div className="hidden md:block overflow-x-auto">
+              <div className="hidden md:block">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
                   <thead className="bg-gray-50 dark:bg-slate-700">
                     <tr>
@@ -295,6 +309,9 @@ export default function OrdersPage() {
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-300 uppercase tracking-wider">
                         Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-300 uppercase tracking-wider">
+                        Cashier
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-300 uppercase tracking-wider">
                         Due Date
@@ -337,6 +354,9 @@ export default function OrdersPage() {
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(isOverdue(order) ? 'overdue' : order.paymentStatus)}`}>
                             {isOverdue(order) ? 'Overdue' : order.paymentStatus}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
+                          {order.cashier || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                           {order.dueDate ? formatDate(order.dueDate) : 'No due date'}
@@ -417,6 +437,9 @@ export default function OrdersPage() {
                         Customer: {order.customerName || 'Walk-in Customer'}
                       </p>
                       <p className="text-sm text-gray-900 dark:text-slate-100">
+                        Cashier: {order.cashier || 'N/A'}
+                      </p>
+                      <p className="text-sm text-gray-900 dark:text-slate-100">
                         Total: {formatCurrency(order.finalAmount)}
                       </p>
                       <p className="text-sm text-green-600 dark:text-green-400">
@@ -472,8 +495,8 @@ export default function OrdersPage() {
 
         {/* Order Details Modal */}
         {selectedOrder && !paymentModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="backdrop-blur-md bg-white/95 dark:bg-slate-900/95 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200/50 dark:border-slate-700/50 mx-4">
               <div className="p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Order Details</h3>
@@ -616,8 +639,8 @@ export default function OrdersPage() {
 
         {/* Payment Modal */}
         {paymentModal && selectedOrder && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="backdrop-blur-md bg-white/95 dark:bg-slate-900/95 rounded-xl shadow-2xl max-w-md w-full border border-slate-200/50 dark:border-slate-700/50 mx-4">
               <div className="p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Add Payment</h3>
@@ -767,6 +790,27 @@ export default function OrdersPage() {
                   {selectedOrder.amountDue > 0 && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                        Cashier *
+                      </label>
+                      <select
+                        value={paymentData.cashier}
+                        onChange={(e) => setPaymentData({ ...paymentData, cashier: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        required
+                      >
+                        <option value="">Select Cashier</option>
+                        {store?.cashiers?.map((cashier) => (
+                          <option key={cashier} value={cashier}>
+                            {cashier}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {selectedOrder.amountDue > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                         Notes (Optional)
                       </label>
                       <textarea
@@ -790,10 +834,19 @@ export default function OrdersPage() {
                   </button>
                   <button
                     onClick={handleAddPayment}
-                    disabled={paymentData.amount <= 0 || paymentData.amount > selectedOrder.amountDue || selectedOrder.amountDue <= 0}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed cursor-pointer"
+                    disabled={paymentLoading || paymentData.amount <= 0 || paymentData.amount > selectedOrder.amountDue || selectedOrder.amountDue <= 0}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed cursor-pointer flex items-center"
                   >
-                    {selectedOrder.amountDue <= 0 ? 'Fully Paid' : `Add ₱${paymentData.amount.toFixed(2)} Payment`}
+                    {paymentLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Processing...
+                      </>
+                    ) : selectedOrder.amountDue <= 0 ? (
+                      'Fully Paid'
+                    ) : (
+                      `Add ₱${paymentData.amount.toFixed(2)} Payment`
+                    )}
                   </button>
                 </div>
               </div>
@@ -813,55 +866,16 @@ export default function OrdersPage() {
         />
 
         {/* Confirmation Modal */}
-        {confirmModal.isOpen && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[200]">
-            <div className="bg-white dark:bg-slate-800 rounded-lg max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
-              <div className="flex items-center mb-4">
-                <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-                  confirmModal.type === 'danger' ? 'bg-red-100 dark:bg-red-900/30' : 'bg-yellow-100 dark:bg-yellow-900/30'
-                }`}>
-                  {confirmModal.type === 'danger' ? (
-                    <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.732 15.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-6 h-6 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.732 15.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                  )}
-                </div>
-                <div className="ml-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
-                    {confirmModal.title}
-                  </h3>
-                </div>
-              </div>
-              <div className="mb-6">
-                <p className="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-line">
-                  {confirmModal.message}
-                </p>
-              </div>
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  onClick={closeConfirmation}
-                  className="px-4 py-2 text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors"
-                >
-                  {confirmModal.cancelText}
-                </button>
-                <button
-                  onClick={confirmModal.onConfirm}
-                  className={`px-4 py-2 text-white rounded-md transition-colors ${
-                    confirmModal.type === 'danger' 
-                      ? 'bg-red-600 hover:bg-red-700'
-                      : 'bg-yellow-600 hover:bg-yellow-700'
-                  }`}
-                >
-                  {confirmModal.confirmText}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <ConfirmationModal
+          isOpen={confirmModal.isOpen}
+          onClose={closeConfirmation}
+          onConfirm={confirmModal.onConfirm}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          type={confirmModal.type}
+          confirmText={confirmModal.confirmText}
+          cancelText={confirmModal.cancelText}
+        />
       </div>
     </Layout>
     </ProtectedRoute>

@@ -117,7 +117,8 @@ export async function POST(request: NextRequest) {
       customerName, 
       customerPhone,
       customerEmail,
-      notes 
+      notes,
+      cashier 
     } = body
     
     if (!items || items.length === 0) {
@@ -144,10 +145,10 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      if (product.quantity < item.quantity) {
+      if (product.availableQuantity < item.quantity) {
         return NextResponse.json(
           { 
-            message: `Insufficient stock for ${product.name}. Available: ${product.quantity}` 
+            message: `Insufficient stock for ${product.name}. Available: ${product.availableQuantity}, Total: ${product.totalQuantity}, Reserved: ${product.reservedQuantity}` 
           },
           { status: 400 }
         )
@@ -216,24 +217,44 @@ export async function POST(request: NextRequest) {
             customerPhone,
             customerEmail,
             notes,
-            status: paymentStatus === 'paid' ? 'completed' : 'active',
+            cashier,
+            status: paymentStatus === 'paid' ? 'completed' : 'pending',
+            approvalStatus: paymentStatus === 'paid' ? 'approved' : 'pending',
+            approvedBy: paymentStatus === 'paid' ? 'Admin' : undefined,
+            approvedAt: paymentStatus === 'paid' ? new Date() : undefined,
             storeId: authContext.store._id,
             createdBy: authContext.store._id
           })
           
           savedSale = await sale.save({ session })
           
-          // Update product quantities atomically
+          // Update product quantities - ALL orders immediately reduce available stock
           for (const item of items) {
-            const updateResult = await Product.findOneAndUpdate(
-              { _id: item.productId, storeId: authContext.store._id },
-              { $inc: { quantity: -item.quantity } },
-              { session, new: true }
-            )
-            
-            // Double-check that we didn't go below zero (additional safety)
-            if (updateResult && updateResult.quantity < 0) {
-              throw new Error(`Product ${updateResult.name} would have negative stock after sale`)
+            if (paymentStatus === 'paid') {
+              // Immediate sale - deduct from total quantity directly
+              const updateResult = await Product.findOneAndUpdate(
+                { _id: item.productId, storeId: authContext.store._id },
+                { $inc: { totalQuantity: -item.quantity } },
+                { session, new: true }
+              )
+              
+              // Double-check that we didn't go below zero
+              if (updateResult && updateResult.totalQuantity < 0) {
+                throw new Error(`Product ${updateResult.name} would have negative stock after sale`)
+              }
+            } else {
+              // Pending/partial payment - still reduce from total quantity to prevent overselling
+              // This ensures accurate inventory tracking regardless of payment status
+              const updateResult = await Product.findOneAndUpdate(
+                { _id: item.productId, storeId: authContext.store._id },
+                { $inc: { totalQuantity: -item.quantity } },
+                { session, new: true }
+              )
+              
+              // Double-check that we didn't go below zero
+              if (updateResult && updateResult.totalQuantity < 0) {
+                throw new Error(`Product ${updateResult.name} would have negative stock after sale`)
+              }
             }
           }
         })
@@ -276,24 +297,29 @@ export async function POST(request: NextRequest) {
         customerPhone,
         customerEmail,
         notes,
-        status: paymentStatus === 'paid' ? 'completed' : 'active',
+        cashier,
+        status: paymentStatus === 'paid' ? 'completed' : 'pending',
+        approvalStatus: paymentStatus === 'paid' ? 'approved' : 'pending',
+        approvedBy: paymentStatus === 'paid' ? 'Admin' : undefined,
+        approvedAt: paymentStatus === 'paid' ? new Date() : undefined,
         storeId: authContext.store._id,
         createdBy: authContext.store._id
       })
       
       savedSale = await sale.save()
       
-      // Update product quantities (without transaction)
+      // Update product quantities - ALL orders immediately reduce available stock (without transaction)
       for (const item of items) {
+        // All orders reduce total quantity immediately to prevent overselling
         const updateResult = await Product.findOneAndUpdate(
           { _id: item.productId, storeId: authContext.store._id },
-          { $inc: { quantity: -item.quantity } },
+          { $inc: { totalQuantity: -item.quantity } },
           { new: true }
         )
         
         // Double-check that we didn't go below zero
-        if (updateResult && updateResult.quantity < 0) {
-          console.warn(`⚠️ Warning: Product ${updateResult.name} has negative stock: ${updateResult.quantity}`)
+        if (updateResult && updateResult.totalQuantity < 0) {
+          console.warn(`⚠️ Warning: Product ${updateResult.name} has negative stock: ${updateResult.totalQuantity}`)
           // Note: In production, you might want to implement stock reservation or rollback
         }
       }

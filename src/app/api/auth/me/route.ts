@@ -17,9 +17,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       store: {
         id: store._id,
-        name: store.name,
-        username: store.username,
-        settings: store.settings
+        storeName: store.storeName,
+        isAdmin: store.isAdmin,
+        cashiers: store.cashiers
       }
     })
   } catch (error: unknown) {

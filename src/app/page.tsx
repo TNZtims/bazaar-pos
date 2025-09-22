@@ -184,39 +184,6 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Setup Section */}
-        {stats.totalProducts === 0 && (
-          <div className="backdrop-blur-md bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-blue-900/40 dark:to-indigo-900/40 border border-blue-200/50 dark:border-blue-700/50 rounded-2xl p-8 text-center animate-fade-in-up">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">🚀</span>
-            </div>
-            <h2 className="text-2xl font-bold text-blue-900 dark:text-blue-100 mb-2">
-              Welcome to your POS System!
-            </h2>
-            <p className="text-blue-700 dark:text-blue-300 mb-6 max-w-md mx-auto">
-              It looks like you&apos;re getting started. Would you like to add some sample products to explore the features?
-            </p>
-            <button
-              onClick={async () => {
-                try {
-                  const response = await fetch('/api/seed', { method: 'POST' })
-                  const result = await response.json()
-                  if (result.success) {
-                    success('Sample products added successfully!', 'Products Added')
-                    window.location.reload()
-                  } else {
-                    error('Error adding sample products: ' + result.message, 'Setup Failed')
-                  }
-                } catch {
-                  error('Error adding sample products', 'Setup Failed')
-                }
-              }}
-              className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-8 py-3 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
-            >
-              Add Sample Products
-            </button>
-          </div>
-        )}
 
         {/* Quick Actions */}
         <div className="backdrop-blur-md bg-white/90 dark:bg-slate-900/90 rounded-2xl p-8 border border-slate-200/50 dark:border-slate-700/50">

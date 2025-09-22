@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import Layout from '@/components/Layout'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { useToast } from '@/contexts/ToastContext'
+import { useAuth } from '@/contexts/AuthContext'
+import Modal, { ConfirmationModal } from '@/components/Modal'
 
 interface Product {
   _id: string
@@ -22,12 +24,14 @@ interface CartItem {
 
 export default function SalesPage() {
   const { success, error, info } = useToast()
+  const { store } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
-  const [cartCollapsed, setCartCollapsed] = useState(false)
+  const [selectedCashier, setSelectedCashier] = useState('')
+  const [cartCollapsed, setCartCollapsed] = useState(true)
   const [imageModal, setImageModal] = useState<{
     isOpen: boolean
     imageUrl: string
@@ -234,6 +238,11 @@ export default function SalesPage() {
       return
     }
 
+    if (!selectedCashier.trim()) {
+      error('Please select a cashier for this sale')
+      return
+    }
+
     // Show confirmation before proceeding
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0)
     const paymentText = saleData.paymentStatus === 'paid' ? 'Process full payment' :
@@ -273,7 +282,8 @@ export default function SalesPage() {
         customerName: saleData.customerName,
         customerPhone: saleData.customerPhone,
         customerEmail: saleData.customerEmail,
-        notes: saleData.notes
+        notes: saleData.notes,
+        cashier: selectedCashier
       }
 
       const response = await fetch('/api/sales', {
@@ -320,7 +330,7 @@ export default function SalesPage() {
   return (
     <ProtectedRoute>
       <Layout>
-        <div className="space-y-6">
+        <div className="space-y-6 px-4 sm:px-0">
           {/* Header */}
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Sales & Checkout</h1>
@@ -371,7 +381,7 @@ export default function SalesPage() {
                        </>
                      )}
                 <svg 
-                  className={`w-5 h-5 text-gray-500 dark:text-slate-400 transition-transform ${cartCollapsed ? 'rotate-180' : ''}`} 
+                  className={`w-5 h-5 text-gray-500 dark:text-slate-400 transition-transform ${!cartCollapsed ? 'rotate-180' : ''}`} 
                   fill="none" 
                   stroke="currentColor" 
                   viewBox="0 0 24 24"
@@ -458,8 +468,31 @@ export default function SalesPage() {
                         </div>
                       </div>
 
+                      {/* Cashier Selection */}
+                      <div>
+                        <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">
+                          Cashier *
+                        </label>
+                        <select
+                          value={selectedCashier}
+                          onChange={(e) => setSelectedCashier(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                          required
+                        >
+                          <option value="">Select Cashier</option>
+                          {store?.cashiers?.map((cashier) => (
+                            <option key={cashier} value={cashier}>
+                              {cashier}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
                       {saleData.paymentStatus !== 'paid' && (
                         <div>
+                          <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">
+                            Customer Name *
+                          </label>
                           <input
                             type="text"
                             placeholder="Customer name (required for credit)"
@@ -551,93 +584,52 @@ export default function SalesPage() {
 
 
         {/* Confirmation Modal */}
-        {confirmModal.isOpen && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[200]">
-            <div className="bg-white dark:bg-slate-800 rounded-lg max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
-              <div className="flex items-center mb-4">
-                <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-                  confirmModal.type === 'danger' ? 'bg-red-100 dark:bg-red-900/30' : 'bg-yellow-100 dark:bg-yellow-900/30'
-                }`}>
-                  {confirmModal.type === 'danger' ? (
-                    <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.732 15.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-6 h-6 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.732 15.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                  )}
-                </div>
-                <div className="ml-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
-                    {confirmModal.title}
-                  </h3>
-                </div>
-              </div>
-              <div className="mb-6">
-                <p className="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-line">
-                  {confirmModal.message}
-                </p>
-              </div>
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  onClick={closeConfirmation}
-                  className="px-4 py-2 text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors"
-                >
-                  {confirmModal.cancelText}
-                </button>
-                <button
-                  onClick={confirmModal.onConfirm}
-                  className={`px-4 py-2 text-white rounded-md transition-colors ${
-                    confirmModal.type === 'danger' 
-                      ? 'bg-red-600 hover:bg-red-700'
-                      : 'bg-yellow-600 hover:bg-yellow-700'
-                  }`}
-                >
-                  {confirmModal.confirmText}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <ConfirmationModal
+          isOpen={confirmModal.isOpen}
+          onClose={closeConfirmation}
+          onConfirm={confirmModal.onConfirm}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          type={confirmModal.type}
+          confirmText={confirmModal.confirmText}
+          cancelText={confirmModal.cancelText}
+        />
 
         {/* Image Modal */}
-        {imageModal.isOpen && (
-          <div 
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[300]"
-            onClick={closeImageModal}
-          >
-            <div 
-              className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center"
-              onClick={(e) => e.stopPropagation()}
+        <Modal 
+          isOpen={imageModal.isOpen} 
+          onClose={closeImageModal}
+          size="xl"
+          className="bg-black/90"
+          showCloseButton={false}
+        >
+          <div className="relative -m-6 flex items-center justify-center min-h-[70vh]">
+            {/* Close Button */}
+            <button
+              onClick={closeImageModal}
+              className="absolute top-4 right-4 z-10 w-10 h-10 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors"
             >
-              {/* Close Button */}
-              <button
-                onClick={closeImageModal}
-                className="absolute top-4 right-4 z-10 w-10 h-10 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
 
-              {/* Image */}
-              <img
-                src={imageModal.imageUrl}
-                alt={imageModal.productName}
-                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/images/products/default.svg'
-                }}
-              />
+            {/* Image */}
+            <img
+              src={imageModal.imageUrl}
+              alt={imageModal.productName}
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/images/products/default.svg'
+              }}
+            />
 
-              {/* Product Name */}
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-lg">
-                <p className="text-lg font-medium text-center">{imageModal.productName}</p>
-              </div>
+            {/* Product Name */}
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-lg">
+              <p className="text-lg font-medium text-center">{imageModal.productName}</p>
             </div>
           </div>
-        )}
+        </Modal>
       </div>
     </Layout>
     </ProtectedRoute>

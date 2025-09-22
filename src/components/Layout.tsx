@@ -39,6 +39,10 @@ const Layout = ({ children }: LayoutProps) => {
     { name: 'Products', href: '/products', icon: '📦', gradient: 'from-green-500 to-teal-600' },
     { name: 'Sales', href: '/sales', icon: '💰', gradient: 'from-yellow-500 to-orange-600' },
     { name: 'Orders', href: '/orders', icon: '📋', gradient: 'from-purple-500 to-indigo-600' },
+    ...(store?.isAdmin ? [
+      { name: 'Users', href: '/users', icon: '👥', gradient: 'from-cyan-500 to-blue-600' },
+      { name: 'Cashiers', href: '/cashiers', icon: '💼', gradient: 'from-emerald-500 to-teal-600' }
+    ] : []),
     { name: 'Sales History', href: '/sales/history', icon: '📊', gradient: 'from-indigo-500 to-purple-600' },
     { name: 'Reports', href: '/reports', icon: '📈', gradient: 'from-pink-500 to-rose-600' },
   ]
@@ -74,9 +78,9 @@ const Layout = ({ children }: LayoutProps) => {
         <div className={`
           lg:w-72 lg:flex-shrink-0
           ${sidebarOpen ? 'block' : 'hidden'} lg:block
-          fixed lg:sticky lg:top-0 inset-y-0 left-0 z-40 lg:z-0 lg:h-screen
+          fixed lg:sticky lg:top-0 inset-y-0 left-0 z-40 lg:z-0 lg:h-screen w-72
         `}>
-          <div className="h-full lg:h-screen backdrop-blur-md bg-white/90 dark:bg-slate-900/90 border-r border-slate-200/50 dark:border-slate-700/50 animate-slide-in-right overflow-y-auto">
+          <div className="h-full lg:h-screen backdrop-blur-md bg-white/95 dark:bg-slate-900/95 border-r border-slate-200/50 dark:border-slate-700/50 shadow-lg lg:shadow-none overflow-y-auto">
             {/* Logo */}
             <div className="hidden lg:flex items-center justify-between px-6 py-6 border-b border-slate-200/50 dark:border-slate-700/50">
               <div className="flex items-center space-x-3">
@@ -85,7 +89,7 @@ const Layout = ({ children }: LayoutProps) => {
                 </div>
                 <div>
                   <h1 className="text-xl font-bold gradient-text">BzPOS</h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{store?.name || 'Point of Sale'}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{store?.storeName || 'Point of Sale'}</p>
                 </div>
               </div>
               {/* Dark Mode Only - No Toggle Needed */}
@@ -140,11 +144,11 @@ const Layout = ({ children }: LayoutProps) => {
               <div className="backdrop-blur-md bg-slate-100/50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-300/30 dark:border-slate-600/30">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-semibold text-sm">{store?.name?.charAt(0).toUpperCase() || 'S'}</span>
+                    <span className="text-white font-semibold text-sm">{store?.storeName?.charAt(0).toUpperCase() || 'S'}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{store?.name || 'Store'}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">@{store?.username || 'store'}</p>
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{store?.storeName || 'Store'}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">Admin: {store?.isAdmin ? 'Yes' : 'No'}</p>
                   </div>
                 </div>
                 <button
@@ -160,7 +164,7 @@ const Layout = ({ children }: LayoutProps) => {
 
         {/* Main content */}
         <div className="flex-1 lg:max-w-none min-h-screen">
-          <main className="p-4 lg:p-8">
+          <main className="p-2 sm:p-4 lg:p-8">
             <div className="animate-fade-in-up">
               {children}
             </div>
