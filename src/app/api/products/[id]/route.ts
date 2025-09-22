@@ -56,12 +56,24 @@ export async function PUT(
     await connectToDatabase()
     
     const body = await request.json()
-    const { name, price, quantity, description, category, sku, cost, imageUrl } = body
+    const { name, price, quantity, totalQuantity, description, category, sku, cost, imageUrl } = body
+    
+    // Use totalQuantity if provided, otherwise fall back to quantity for backward compatibility
+    const finalQuantity = totalQuantity !== undefined ? totalQuantity : quantity
     
     const { id } = await params
     const product = await Product.findByIdAndUpdate(
       id,
-      { name, price, quantity, description, category, sku, cost, imageUrl },
+      { 
+        name, 
+        price, 
+        totalQuantity: finalQuantity, 
+        description, 
+        category, 
+        sku, 
+        cost, 
+        imageUrl 
+      },
       { new: true, runValidators: true }
     )
     

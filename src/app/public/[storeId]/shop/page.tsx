@@ -118,9 +118,10 @@ export default function PublicShopPage() {
       const existingItem = prevCart.find(item => item.product._id === product._id)
       
       if (existingItem) {
+        const availableStock = product.availableQuantity || product.quantity || 0
         return prevCart.map(item =>
           item.product._id === product._id
-            ? { ...item, quantity: Math.min(item.quantity + 1, product.quantity) }
+            ? { ...item, quantity: Math.min(item.quantity + 1, availableStock) }
             : item
         )
       } else {
@@ -136,7 +137,7 @@ export default function PublicShopPage() {
       setCart(prevCart =>
         prevCart.map(item =>
           item.product._id === productId
-            ? { ...item, quantity: Math.min(quantity, item.product.quantity) }
+            ? { ...item, quantity: Math.min(quantity, item.product.availableQuantity || item.product.quantity || 0) }
             : item
         )
       )

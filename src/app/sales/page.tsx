@@ -136,7 +136,8 @@ export default function SalesPage() {
     const existingItem = cart.find(item => item.product._id === product._id)
     
     if (existingItem) {
-      if (existingItem.quantity < product.quantity) {
+      const availableStock = product.availableQuantity || product.quantity || 0
+      if (existingItem.quantity < availableStock) {
         setCart(cart.map(item =>
           item.product._id === product._id
             ? { ...item, quantity: item.quantity + 1 }
@@ -144,10 +145,11 @@ export default function SalesPage() {
         ))
         success(`Added ${product.name} to cart (${existingItem.quantity + 1})`)
       } else {
-        error(`Not enough stock available for ${product.name}`)
+        error(`Not enough stock available for ${product.name}. Available: ${availableStock}`)
       }
     } else {
-      if (product.quantity > 0) {
+      const availableStock = product.availableQuantity || product.quantity || 0
+      if (availableStock > 0) {
         setCart([...cart, { product, quantity: 1 }])
         success(`${product.name} added to cart!`)
       } else {
@@ -164,14 +166,17 @@ export default function SalesPage() {
       if (item) {
         info(`${item.product.name} removed from cart`)
       }
-    } else {
-      setCart(cart.map(item =>
-        item.product._id === productId
-          ? { ...item, quantity: newQuantity }
-          : item
-      ))
-      if (item) {
+    } else if (item) {
+      const availableStock = item.product.availableQuantity || item.product.quantity || 0
+      if (newQuantity <= availableStock) {
+        setCart(cart.map(cartItem =>
+          cartItem.product._id === productId
+            ? { ...cartItem, quantity: newQuantity }
+            : cartItem
+        ))
         success(`${item.product.name} quantity updated to ${newQuantity}`)
+      } else {
+        error(`Not enough stock available for ${item.product.name}. Available: ${availableStock}`)
       }
     }
   }

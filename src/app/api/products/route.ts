@@ -77,10 +77,13 @@ export async function POST(request: NextRequest) {
     await connectToDatabase()
     
     const body = await request.json()
-    const { name, price, cost, quantity, description, category, sku, imageUrl } = body
+    const { name, price, cost, quantity, totalQuantity, description, category, sku, imageUrl } = body
+    
+    // Use totalQuantity if provided, otherwise fall back to quantity for backward compatibility
+    const finalQuantity = totalQuantity !== undefined ? totalQuantity : quantity
     
     // Validation
-    if (!name || !price || quantity === undefined) {
+    if (!name || !price || finalQuantity === undefined) {
       return NextResponse.json(
         { message: 'Name, price, and quantity are required' },
         { status: 400 }
@@ -91,7 +94,8 @@ export async function POST(request: NextRequest) {
       name,
       price,
       cost,
-      quantity,
+      totalQuantity: finalQuantity,
+      reservedQuantity: 0, // Default to 0 for new products
       description,
       category,
       sku,
