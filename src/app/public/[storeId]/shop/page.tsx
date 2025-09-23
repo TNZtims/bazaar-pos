@@ -92,11 +92,15 @@ export default function PublicShopPage() {
     checkAuth()
   }, [storeId, router])
 
-  // Cleanup reserved stock when component unmounts
+  // Page refresh/exit protection with cart cleanup
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      // Use navigator.sendBeacon for more reliable cleanup
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (cart.length > 0) {
+        // Show confirmation prompt
+        event.preventDefault()
+        event.returnValue = 'You have items in your cart. Are you sure you want to leave? All cart data will be lost and reserved stock will be released.'
+        
+        // Use navigator.sendBeacon for more reliable cleanup
         for (const item of cart) {
           try {
             const data = JSON.stringify({

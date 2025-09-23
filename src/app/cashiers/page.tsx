@@ -23,10 +23,6 @@ export default function CashiersPage() {
       window.location.href = '/login'
       return
     }
-    if (!store.isAdmin) {
-      window.location.href = '/'
-      return
-    }
     loadCashiers()
   }, [store])
 
@@ -138,13 +134,13 @@ export default function CashiersPage() {
     }
   }
 
-  if (!store || !store.isAdmin) {
+  if (!store) {
     return (
       <Layout>
         <div className="min-h-screen flex items-center justify-center bg-red-50">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
-            <p className="text-gray-600">Only administrators can manage cashiers.</p>
+            <p className="text-gray-600">Please log in to access cashier management.</p>
           </div>
         </div>
       </Layout>

@@ -50,17 +50,12 @@ export default function UsersPage() {
       window.location.href = '/login'
       return
     }
-    if (!store.isAdmin) {
-      // If store exists but not admin, redirect to dashboard
-      window.location.href = '/'
-      return
-    }
     fetchUsers()
   }, [store])
 
   // Refetch when pagination or sorting changes
   useEffect(() => {
-    if (store?.isAdmin) {
+    if (store) {
       fetchUsers()
     }
   }, [currentPage, itemsPerPage, sortField, sortDirection, searchTerm])
@@ -258,13 +253,13 @@ export default function UsersPage() {
     }
   }
 
-  if (!store || !store.isAdmin) {
+  if (!store) {
     return (
       <Layout>
         <div className="min-h-screen flex items-center justify-center bg-red-50">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
-            <p className="text-gray-600">Only administrators can access user management.</p>
+            <p className="text-gray-600">Please log in to access user management.</p>
           </div>
         </div>
       </Layout>

@@ -80,6 +80,55 @@ export default function SalesPage() {
     fetchProducts()
   }, [searchTerm])
 
+  // Page refresh/exit protection with cart cleanup
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (cart.length > 0) {
+        event.preventDefault()
+        event.returnValue = 'You have items in your cart. Are you sure you want to leave? All cart data will be lost and reserved stock will be released.'
+        
+        // Release reserved stock using sendBeacon for reliability
+        for (const item of cart) {
+          try {
+            const data = JSON.stringify({
+              productId: item.product._id,
+              quantity: item.quantity,
+              action: 'release'
+            })
+            navigator.sendBeacon('/api/products/admin-reserve', data)
+          } catch (err) {
+            console.error('Failed to release reserved stock:', err)
+          }
+        }
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      
+      // Cleanup on component unmount - release reserved stock
+      if (cart.length > 0) {
+        cart.forEach(async (item) => {
+          try {
+            await fetch('/api/products/admin-reserve', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                productId: item.product._id,
+                quantity: item.quantity,
+                action: 'release'
+              })
+            })
+          } catch (err) {
+            console.error('Failed to release reserved stock on unmount:', err)
+          }
+        })
+      }
+    }
+  }, [cart])
+
 
   const showConfirmation = (
     title: string,
