@@ -52,6 +52,12 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true)
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [sortBy, setSortBy] = useState<'createdAt' | 'finalAmount' | 'customerName'>('createdAt')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [showFilters, setShowFilters] = useState(false)
   const [paymentModal, setPaymentModal] = useState(false)
   const [orderEditModal, setOrderEditModal] = useState(false)
   const [confirmModal, setConfirmModal] = useState<{
@@ -81,7 +87,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders()
-  }, [filterStatus])
+  }, [filterStatus, searchTerm, dateFrom, dateTo, sortBy, sortOrder])
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -91,6 +97,22 @@ export default function OrdersPage() {
       
       if (filterStatus !== 'all') {
         params.append('paymentStatus', filterStatus)
+      }
+      
+      if (searchTerm.trim()) {
+        params.append('search', searchTerm)
+      }
+      
+      if (dateFrom) {
+        params.append('startDate', dateFrom)
+      }
+      
+      if (dateTo) {
+        params.append('endDate', dateTo)
+      }
+      
+      if (sortBy && sortOrder) {
+        params.append('sort', `${sortOrder === 'desc' ? '-' : ''}${sortBy}`)
       }
 
       const response = await fetch(`/api/sales?${params}`)
@@ -161,6 +183,7 @@ export default function OrdersPage() {
       if (response.ok) {
         success('Payment added successfully!', 'Payment Added')
         setPaymentModal(false)
+        setSelectedOrder(null)
         setPaymentData({ amount: 0, method: 'cash', notes: '', cashier: '' })
         fetchOrders()
       } else {
@@ -209,12 +232,45 @@ export default function OrdersPage() {
     )
   }
 
+  const handleDeleteOrder = async (orderId: string) => {
+    const order = orders.find(o => o._id === orderId)
+    if (!order) return
+
+    showConfirmation(
+      'Delete Order',
+      `Are you sure you want to permanently delete this order?\n\nOrder #${order._id.slice(-6)}\nCustomer: ${order.customerName || 'Walk-in Customer'}\nTotal: ${formatCurrency(order.finalAmount)}\n\nThis action cannot be undone. Reserved stock will be released.`,
+      async () => {
+        try {
+          const response = await fetch(`/api/sales/${orderId}`, {
+            method: 'DELETE'
+          })
+
+          if (response.ok) {
+            closeConfirmation()
+            success('Order deleted successfully!', 'Order Deleted')
+            fetchOrders()
+          } else {
+            const errorData = await response.json()
+            error(`Error: ${errorData.message}`, 'Delete Failed')
+          }
+        } catch (err) {
+          console.error('Error deleting order:', err)
+          error('Error deleting order', 'Delete Failed')
+        }
+      },
+      'danger',
+      'Delete Order',
+      'Cancel'
+    )
+  }
+
   const openPaymentModal = (order: Order) => {
     setSelectedOrder(order)
     setPaymentData({ 
       amount: order.amountDue, 
       method: 'cash', 
-      notes: '' 
+      notes: '',
+      cashier: '' 
     })
     setPaymentModal(true)
   }
@@ -257,6 +313,37 @@ export default function OrdersPage() {
     return new Date(order.dueDate) < new Date()
   }
 
+  const clearFilters = () => {
+    setFilterStatus('all')
+    setSearchTerm('')
+    setDateFrom('')
+    setDateTo('')
+    setSortBy('createdAt')
+    setSortOrder('desc')
+  }
+
+  const setTodayFilter = () => {
+    const today = new Date().toISOString().split('T')[0]
+    setDateFrom(today)
+    setDateTo(today)
+  }
+
+  const setThisWeekFilter = () => {
+    const today = new Date()
+    const weekStart = new Date(today.setDate(today.getDate() - today.getDay()))
+    const weekEnd = new Date(today.setDate(today.getDate() - today.getDay() + 6))
+    setDateFrom(weekStart.toISOString().split('T')[0])
+    setDateTo(weekEnd.toISOString().split('T')[0])
+  }
+
+  const setThisMonthFilter = () => {
+    const today = new Date()
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    setDateFrom(monthStart.toISOString().split('T')[0])
+    setDateTo(monthEnd.toISOString().split('T')[0])
+  }
+
   return (
     <ProtectedRoute>
       <Layout>
@@ -268,23 +355,146 @@ export default function OrdersPage() {
             <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Manage orders, payments, and modifications</p>
           </div>
           
-          {/* Filter */}
-          <div className="mt-4 sm:mt-0">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+          {/* Quick Actions */}
+          <div className="mt-4 sm:mt-0 flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
             >
-              <option value="all">All Orders</option>
-              <option value="pending">Pending Payment</option>
-              <option value="partial">Partial Payment</option>
-              <option value="overdue">Overdue</option>
-            </select>
+              {showFilters ? 'Hide Filters' : 'Show Filters'}
+            </button>
+            <button
+              onClick={clearFilters}
+              className="px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+            >
+              Clear All
+            </button>
           </div>
         </div>
 
+        {/* Advanced Filters */}
+        {showFilters && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Search */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Search Orders
+                </label>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Customer name, order ID..."
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Payment Status */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Payment Status
+                </label>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Orders</option>
+                  <option value="pending">Pending Payment</option>
+                  <option value="partial">Partial Payment</option>
+                  <option value="paid">Paid</option>
+                  <option value="overdue">Overdue</option>
+                </select>
+              </div>
+
+              {/* Date From */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Date From
+                </label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Date To */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Date To
+                </label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Sort By */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Sort By
+                </label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'createdAt' | 'finalAmount' | 'customerName')}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="createdAt">Date Created</option>
+                  <option value="finalAmount">Order Amount</option>
+                  <option value="customerName">Customer Name</option>
+                </select>
+              </div>
+
+              {/* Sort Order */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Sort Order
+                </label>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="desc">Newest First</option>
+                  <option value="asc">Oldest First</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Quick Date Filters */}
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-600">
+              <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Quick Date Filters:</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={setTodayFilter}
+                  className="px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                >
+                  Today
+                </button>
+                <button
+                  onClick={setThisWeekFilter}
+                  className="px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                >
+                  This Week
+                </button>
+                <button
+                  onClick={setThisMonthFilter}
+                  className="px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                >
+                  This Month
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Orders Table */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 max-h-[70vh] overflow-auto">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
           {loading ? (
             <div className="p-8 text-center text-gray-600 dark:text-slate-400">Loading orders...</div>
           ) : orders.length === 0 ? (
@@ -376,7 +586,10 @@ export default function OrdersPage() {
                             </button>
                             {order.amountDue > 0 && (
                               <button
-                                onClick={() => openPaymentModal(order)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openPaymentModal(order)
+                                }}
                                 className="inline-flex items-center px-3 py-1.5 border border-green-300 dark:border-green-600 text-xs font-medium rounded-md text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
                                 title="Add Payment"
                               >
@@ -408,6 +621,18 @@ export default function OrdersPage() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                                 Cancel
+                              </button>
+                            )}
+                            {(order.paymentStatus === 'pending' || order.status === 'pending') && (
+                              <button
+                                onClick={() => handleDeleteOrder(order._id)}
+                                className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/20 hover:bg-gray-100 dark:hover:bg-gray-900/40 transition-colors"
+                                title="Delete Order"
+                              >
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                Delete
                               </button>
                             )}
                           </div>
@@ -465,7 +690,10 @@ export default function OrdersPage() {
                       </button>
                       {order.amountDue > 0 && (
                         <button
-                          onClick={() => openPaymentModal(order)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openPaymentModal(order)
+                          }}
                           className="inline-flex items-center px-2.5 py-1.5 border border-green-300 dark:border-green-600 text-xs font-medium rounded text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
                         >
                           <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -485,6 +713,17 @@ export default function OrdersPage() {
                           Edit
                         </button>
                       )}
+                      {(order.paymentStatus === 'pending' || order.status === 'pending') && (
+                        <button
+                          onClick={() => handleDeleteOrder(order._id)}
+                          className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/20 hover:bg-gray-100 dark:hover:bg-gray-900/40 transition-colors"
+                        >
+                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -494,7 +733,7 @@ export default function OrdersPage() {
         </div>
 
         {/* Order Details Modal */}
-        {selectedOrder && !paymentModal && (
+        {selectedOrder && !paymentModal && !orderEditModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="backdrop-blur-md bg-white/95 dark:bg-slate-900/95 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200/50 dark:border-slate-700/50 mx-4">
               <div className="p-6">
@@ -645,7 +884,10 @@ export default function OrdersPage() {
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Add Payment</h3>
                   <button
-                    onClick={() => setPaymentModal(false)}
+                    onClick={() => {
+                      setPaymentModal(false)
+                      setSelectedOrder(null)
+                    }}
                     className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer"
                   >
                     <span className="sr-only">Close</span>

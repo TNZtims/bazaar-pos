@@ -336,7 +336,7 @@ export default function UsersPage() {
         </div>
 
         {/* Users Table */}
-        <div className="backdrop-blur-md bg-white/90 dark:bg-slate-900/90 rounded-xl border border-slate-200/50 dark:border-slate-700/50 shadow-lg overflow-hidden max-h-[70vh] flex flex-col">
+        <div className="backdrop-blur-md bg-white/90 dark:bg-slate-900/90 rounded-xl border border-slate-200/50 dark:border-slate-700/50 shadow-lg overflow-hidden">
           {loading ? (
             <div className="p-8 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
@@ -348,7 +348,8 @@ export default function UsersPage() {
             </div>
           ) : (
             <>
-            <div className="overflow-auto flex-1">
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead className="bg-slate-50/50 dark:bg-slate-800/50">
                   <tr>
@@ -460,74 +461,159 @@ export default function UsersPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden space-y-4 p-4">
+              {users.map((user) => (
+                <div key={user._id} className="bg-slate-50/50 dark:bg-slate-800/50 rounded-lg p-4 border border-slate-200/50 dark:border-slate-700/50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate">{user.name}</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">ID: {user.customId}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        Created: {new Date(user.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleToggleActive(user)}
+                      disabled={actionLoading[`toggle-${user._id}`]}
+                      className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ml-3 ${
+                        user.isActive
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+                          : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
+                      }`}
+                    >
+                      {actionLoading[`toggle-${user._id}`] ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
+                          Updating...
+                        </>
+                      ) : (
+                        user.isActive ? 'Active' : 'Inactive'
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingUser(user)
+                        setFormData({ customId: user.customId, name: user.name })
+                        setShowCreateModal(true)
+                      }}
+                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                    >
+                      <Edit className="w-3 h-3 mr-1" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(user._id)}
+                      disabled={actionLoading[`delete-${user._id}`]}
+                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {actionLoading[`delete-${user._id}`] ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-3 h-3 mr-1" />
+                          Delete
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
             
-            {/* Pagination Controls - Fixed at bottom */}
-            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-inherit flex-shrink-0">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-sm text-slate-500 dark:text-slate-400">
+            {/* Pagination Controls */}
+            <div className="px-4 sm:px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-inherit">
+              <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:justify-between sm:space-y-0 gap-4">
+                <div className="text-sm text-slate-500 dark:text-slate-400 text-center sm:text-left">
                   Showing {startItem} to {endItem} of {totalUsers} users
                 </div>
                 
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4">
                   {/* Items per page selector */}
-                  <select
-                    value={itemsPerPage}
-                    onChange={(e) => {
-                      setItemsPerPage(Number(e.target.value))
-                      setCurrentPage(1)
-                    }}
-                    className="text-sm border border-slate-300 dark:border-slate-600 rounded-md px-3 py-1 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                  >
-                    <option value={5}>5 per page</option>
-                    <option value={10}>10 per page</option>
-                    <option value={20}>20 per page</option>
-                    <option value={50}>50 per page</option>
-                  </select>
+                  <div className="flex items-center justify-center sm:justify-start space-x-2">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">Show:</span>
+                    <select
+                      value={itemsPerPage}
+                      onChange={(e) => {
+                        setItemsPerPage(Number(e.target.value))
+                        setCurrentPage(1)
+                      }}
+                      className="text-sm border border-slate-300 dark:border-slate-600 rounded-md px-3 py-1 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
                   
                   {/* Pagination buttons */}
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center justify-center space-x-1">
                     <button
                       onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-2 sm:px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Previous
+                      <span className="hidden sm:inline">Previous</span>
+                      <span className="sm:hidden">‹</span>
                     </button>
                     
-                    {/* Page numbers */}
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum
-                      if (totalPages <= 5) {
-                        pageNum = i + 1
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i
-                      } else {
-                        pageNum = currentPage - 2 + i
-                      }
-                      
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={`px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md ${
-                            currentPage === pageNum
-                              ? 'bg-blue-500 text-white border-blue-500'
-                              : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      )
-                    })}
+                    {/* Page numbers - fewer on mobile */}
+                    {totalPages > 1 && (
+                      <>
+                        {/* Mobile: Show only current page */}
+                        <div className="sm:hidden flex items-center space-x-1">
+                          <span className="px-3 py-1 text-sm bg-blue-500 text-white border border-blue-500 rounded-md">
+                            {currentPage}
+                          </span>
+                          <span className="text-sm text-slate-500 dark:text-slate-400">of {totalPages}</span>
+                        </div>
+                        
+                        {/* Desktop: Show page numbers */}
+                        <div className="hidden sm:flex items-center space-x-1">
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum
+                            if (totalPages <= 5) {
+                              pageNum = i + 1
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i
+                            } else {
+                              pageNum = currentPage - 2 + i
+                            }
+                            
+                            return (
+                              <button
+                                key={pageNum}
+                                onClick={() => setCurrentPage(pageNum)}
+                                className={`px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md ${
+                                  currentPage === pageNum
+                                    ? 'bg-blue-500 text-white border-blue-500'
+                                    : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )}
                     
                     <button
                       onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-2 sm:px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Next
+                      <span className="hidden sm:inline">Next</span>
+                      <span className="sm:hidden">›</span>
                     </button>
                   </div>
                 </div>

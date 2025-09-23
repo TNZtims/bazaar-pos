@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate')
     const date = searchParams.get('date') // Single date filter
     const paymentMethod = searchParams.get('paymentMethod')
+    const paymentStatus = searchParams.get('paymentStatus')
     const search = searchParams.get('search') // Customer name search
     const sort = searchParams.get('sort') || '-createdAt' // Sort order
     
@@ -54,6 +55,17 @@ export async function GET(request: NextRequest) {
     // Payment method filter
     if (paymentMethod && paymentMethod !== 'all') {
       query.paymentMethod = paymentMethod
+    }
+
+    // Payment status filter
+    if (paymentStatus && paymentStatus !== 'all') {
+      if (paymentStatus === 'overdue') {
+        // Special handling for overdue orders
+        query.paymentStatus = { $in: ['pending', 'partial'] }
+        query.dueDate = { $lt: new Date() }
+      } else {
+        query.paymentStatus = paymentStatus
+      }
     }
     
     // Customer name search

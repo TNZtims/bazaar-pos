@@ -142,15 +142,23 @@ export async function POST(request: NextRequest) {
     
     const savedOrder = await order.save()
     
-    // Immediately reduce total quantities for all orders to prevent overselling
+    // Convert reserved stock to confirmed sale - reduce total quantity and reserved quantity
+    // The availableQuantity will be automatically updated by the Product middleware
     for (const item of validatedItems) {
-      await Product.findByIdAndUpdate(
-        item.productId,
+      const product = await Product.findByIdAndUpdate(
+        item.product,
         { 
-          $inc: { totalQuantity: -item.quantity }
+          $inc: { 
+            totalQuantity: -item.quantity,
+            reservedQuantity: -item.quantity  // Release the reservation since it's now a confirmed order
+          }
         },
         { new: true }
       )
+      
+      if (!product) {
+        console.error(`Failed to update product ${item.product} after order creation`)
+      }
     }
     
     return NextResponse.json({
@@ -169,6 +177,82 @@ export async function POST(request: NextRequest) {
     console.error('Error creating customer order:', error)
     return NextResponse.json(
       { message: 'Error creating order', error: error.message },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE /api/orders/public - Delete customer's pending order
+export async function DELETE(request: NextRequest) {
+  try {
+    const customerAuth = await authenticateCustomerRequest(request)
+    
+    if (!customerAuth) {
+      return NextResponse.json(
+        { message: 'Customer authentication required' },
+        { status: 401 }
+      )
+    }
+    
+    await connectToDatabase()
+    
+    const { searchParams } = new URL(request.url)
+    const orderId = searchParams.get('orderId')
+    
+    if (!orderId) {
+      return NextResponse.json(
+        { message: 'Order ID is required' },
+        { status: 400 }
+      )
+    }
+    
+    // Find the order and verify ownership
+    const order = await Sale.findOne({
+      _id: orderId,
+      customerId: customerAuth.user._id,
+      storeId: customerAuth.store._id
+    })
+    
+    if (!order) {
+      return NextResponse.json(
+        { message: 'Order not found' },
+        { status: 404 }
+      )
+    }
+    
+    // Only allow deletion of pending orders
+    if (order.approvalStatus !== 'pending' || order.status !== 'pending') {
+      return NextResponse.json(
+        { message: 'Can only delete pending orders' },
+        { status: 400 }
+      )
+    }
+    
+    // Restore product quantities (both total and reserved)
+    for (const item of order.items) {
+      const product = await Product.findById(item.product)
+      if (product) {
+        // Add back to total quantity and reduce reserved quantity
+        await Product.findByIdAndUpdate(
+          item.product,
+          { 
+            $inc: { 
+              totalQuantity: item.quantity,
+              reservedQuantity: -item.quantity 
+            }
+          }
+        )
+      }
+    }
+    
+    await Sale.findByIdAndDelete(orderId)
+    
+    return NextResponse.json({ message: 'Order deleted successfully' })
+    
+  } catch (error: any) {
+    console.error('Error deleting customer order:', error)
+    return NextResponse.json(
+      { message: 'Error deleting order', error: error.message },
       { status: 500 }
     )
   }

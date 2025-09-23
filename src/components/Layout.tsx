@@ -49,9 +49,9 @@ const Layout = ({ children }: LayoutProps) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900 transition-all duration-500">
-      {/* Mobile header */}
+      {/* Mobile header - Fixed */}
       <div className="lg:hidden">
-        <div className="backdrop-blur-md bg-white/90 dark:bg-slate-900/90 border-b border-slate-200/50 dark:border-slate-700/50 px-4 py-3 sticky top-0 z-50">
+        <div className="backdrop-blur-md bg-white/95 dark:bg-slate-900/95 border-b border-slate-200/50 dark:border-slate-700/50 px-4 py-3 fixed top-0 left-0 right-0 z-50">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
@@ -71,6 +71,8 @@ const Layout = ({ children }: LayoutProps) => {
             </div>
           </div>
         </div>
+        {/* Spacer for fixed header */}
+        <div className="h-16"></div>
       </div>
 
       <div className="lg:flex">
@@ -78,7 +80,7 @@ const Layout = ({ children }: LayoutProps) => {
         <div className={`
           lg:w-72 lg:flex-shrink-0
           ${sidebarOpen ? 'block' : 'hidden'} lg:block
-          fixed lg:sticky lg:top-0 inset-y-0 left-0 z-40 lg:z-0 lg:h-screen w-72
+          fixed lg:sticky top-16 lg:top-0 inset-y-0 left-0 z-40 lg:z-0 h-[calc(100vh-4rem)] lg:h-screen w-72
         `}>
           <div className="h-full lg:h-screen backdrop-blur-md bg-white/95 dark:bg-slate-900/95 border-r border-slate-200/50 dark:border-slate-700/50 shadow-lg lg:shadow-none overflow-y-auto">
             {/* Logo */}

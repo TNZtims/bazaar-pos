@@ -541,20 +541,37 @@ export async function DELETE(
       )
     }
     
-    // Restore product quantities
-    for (const item of sale.items) {
-      await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { quantity: item.quantity } }
+    // Only allow deletion of pending orders
+    if (sale.paymentStatus === 'paid' || sale.status === 'completed') {
+      return NextResponse.json(
+        { message: 'Cannot delete completed or paid orders' },
+        { status: 400 }
       )
+    }
+    
+    // Restore product quantities (both total and reserved)
+    for (const item of sale.items) {
+      const product = await Product.findById(item.product)
+      if (product) {
+        // Add back to total quantity and reduce reserved quantity
+        await Product.findByIdAndUpdate(
+          item.product,
+          { 
+            $inc: { 
+              totalQuantity: item.quantity,
+              reservedQuantity: -item.quantity 
+            }
+          }
+        )
+      }
     }
     
     await Sale.findByIdAndDelete(id)
     
-    return NextResponse.json({ message: 'Sale deleted successfully' })
+    return NextResponse.json({ message: 'Order deleted successfully' })
   } catch (error: any) {
     return NextResponse.json(
-      { message: 'Error deleting sale', error: error.message },
+      { message: 'Error deleting order', error: error.message },
       { status: 500 }
     )
   }

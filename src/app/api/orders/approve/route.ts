@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
     
     if (action === 'reject') {
-      // Reject the order
+      // Reject the order and restore inventory
       order.approvalStatus = 'rejected'
       order.status = 'cancelled'
       order.approvedBy = cashier || 'Admin'
@@ -52,6 +52,19 @@ export async function POST(request: NextRequest) {
       
       if (notes) {
         order.notes = order.notes ? `${order.notes}\n\nRejection reason: ${notes}` : `Rejection reason: ${notes}`
+      }
+      
+      // Restore inventory - add back to total quantity and reduce reserved quantity
+      for (const item of order.items) {
+        await Product.findByIdAndUpdate(
+          item.product,
+          { 
+            $inc: { 
+              totalQuantity: item.quantity,
+              reservedQuantity: -item.quantity 
+            }
+          }
+        )
       }
       
       await order.save()
@@ -77,7 +90,8 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      // Check stock availability (in case stock changed)
+      // Check stock availability (inventory was already deducted when order was created)
+      // We just need to verify the products still exist
       for (const item of order.items) {
         const product = await Product.findById(item.product)
         if (!product) {
@@ -86,22 +100,9 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           )
         }
-        
-        if (product.quantity < item.quantity) {
-          return NextResponse.json(
-            { message: `Insufficient stock for ${product.name}. Available: ${product.quantity}, Required: ${item.quantity}` },
-            { status: 400 }
-          )
-        }
       }
       
-      // Update inventory
-      for (const item of order.items) {
-        await Product.findByIdAndUpdate(
-          item.product,
-          { $inc: { quantity: -item.quantity } }
-        )
-      }
+      // No need to update inventory again - it was already deducted when the order was created
       
       // Update order status
       order.approvalStatus = 'approved'

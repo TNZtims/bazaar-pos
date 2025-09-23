@@ -96,12 +96,28 @@ export async function PUT(
       })
     }
     
-    // Immediately reduce quantities for updated order
+    // First, restore inventory from the original order
+    for (const originalItem of existingOrder.items) {
+      await Product.findByIdAndUpdate(
+        originalItem.product,
+        { 
+          $inc: { 
+            totalQuantity: originalItem.quantity,
+            reservedQuantity: -originalItem.quantity 
+          }
+        }
+      )
+    }
+    
+    // Then, deduct inventory for the updated order
     for (const item of validatedItems) {
       await Product.findByIdAndUpdate(
         item.product,
         { 
-          $inc: { totalQuantity: -item.quantity }
+          $inc: { 
+            totalQuantity: -item.quantity,
+            reservedQuantity: item.quantity 
+          }
         }
       )
     }

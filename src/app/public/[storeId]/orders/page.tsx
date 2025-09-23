@@ -39,6 +39,8 @@ export default function CustomerOrdersPage() {
   const [user, setUser] = useState<User | null>(null)
   const [store, setStore] = useState<Store | null>(null)
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+  const [deleting, setDeleting] = useState<string | null>(null)
   
   const params = useParams()
   const router = useRouter()
@@ -112,6 +114,40 @@ export default function CustomerOrdersPage() {
     }
   }
 
+  const handleDeleteOrder = async (orderId: string) => {
+    if (deleting) return
+    
+    if (!confirm('Are you sure you want to delete this order? This action cannot be undone.')) {
+      return
+    }
+    
+    setDeleting(orderId)
+    setError('')
+    setSuccessMessage('')
+    
+    try {
+      const response = await fetch(`/api/orders/public?orderId=${orderId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+      
+      const data = await response.json()
+      
+      if (response.ok) {
+        setSuccessMessage('Order deleted successfully!')
+        // Remove the order from local state
+        setOrders(prevOrders => prevOrders.filter(order => order._id !== orderId))
+        setTimeout(() => setSuccessMessage(''), 5000)
+      } else {
+        setError(data.message || 'Failed to delete order')
+      }
+    } catch (err) {
+      setError('Failed to delete order. Please try again.')
+    } finally {
+      setDeleting(null)
+    }
+  }
+
   const logout = async () => {
     try {
       await fetch('/api/auth/customer/logout', {
@@ -139,9 +175,9 @@ export default function CustomerOrdersPage() {
       {/* Header */}
       <header className="bg-white dark:bg-slate-800 shadow-sm border-b border-gray-200 dark:border-slate-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-4 sm:py-0 sm:h-16">
+            <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 min-w-0">
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-100 truncate">
                 My Orders - {store?.name}
               </h1>
               <span className="text-sm text-gray-500 dark:text-slate-400">
@@ -149,16 +185,16 @@ export default function CustomerOrdersPage() {
               </span>
             </div>
             
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center justify-between sm:justify-end space-x-4 mt-3 sm:mt-0">
               <button
                 onClick={() => router.push(`/public/${storeId}/shop`)}
-                className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm sm:text-base whitespace-nowrap px-2 py-1 touch-manipulation"
               >
                 Continue Shopping
               </button>
               <button
                 onClick={logout}
-                className="text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-300"
+                className="text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-300 text-sm sm:text-base px-2 py-1 touch-manipulation"
               >
                 Logout
               </button>
@@ -175,6 +211,12 @@ export default function CustomerOrdersPage() {
         {error && (
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
             <p className="text-red-800 dark:text-red-200">{error}</p>
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6">
+            <p className="text-green-800 dark:text-green-200">{successMessage}</p>
           </div>
         )}
 
@@ -227,12 +269,21 @@ export default function CustomerOrdersPage() {
                         </span>
                       )}
                       {(order.status === 'pending' && order.approvalStatus === 'pending') && (
-                        <button
-                          onClick={() => router.push(`/public/${storeId}/shop?editOrder=${order._id}`)}
-                          className="px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition-colors"
-                        >
-                          Edit
-                        </button>
+                        <>
+                          <button
+                            onClick={() => router.push(`/public/${storeId}/shop?editOrder=${order._id}`)}
+                            className="px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteOrder(order._id)}
+                            disabled={deleting === order._id}
+                            className="px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {deleting === order._id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        </>
                       )}
                     </div>
                     

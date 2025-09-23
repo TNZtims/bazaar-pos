@@ -13,6 +13,9 @@ interface Product {
   cost?: number
   price: number
   quantity: number
+  totalQuantity: number
+  availableQuantity: number
+  reservedQuantity: number
   category?: string
   imageUrl?: string
 }
@@ -32,6 +35,7 @@ export default function SalesPage() {
   const [processing, setProcessing] = useState(false)
   const [selectedCashier, setSelectedCashier] = useState('')
   const [cartCollapsed, setCartCollapsed] = useState(true)
+  const [addingToCart, setAddingToCart] = useState<string | null>(null)
   const [imageModal, setImageModal] = useState<{
     isOpen: boolean
     imageUrl: string
@@ -132,12 +136,49 @@ export default function SalesPage() {
     }
   }
 
-  const addToCart = (product: Product) => {
-    const existingItem = cart.find(item => item.product._id === product._id)
+  const addToCart = async (product: Product) => {
+    // Prevent multiple rapid additions
+    if (addingToCart === product._id) return
     
-    if (existingItem) {
+    setAddingToCart(product._id)
+    
+    try {
+      const existingItem = cart.find(item => item.product._id === product._id)
+      const currentCartQuantity = existingItem ? existingItem.quantity : 0
       const availableStock = product.availableQuantity || product.quantity || 0
-      if (existingItem.quantity < availableStock) {
+      
+      // Check if we can add one more item
+      if (currentCartQuantity >= availableStock) {
+        error(`Cannot add more ${product.name}. Available stock: ${availableStock}`)
+        return
+      }
+      
+      // For admin sales, we'll immediately reserve the stock
+      try {
+        const response = await fetch('/api/products/admin-reserve', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            productId: product._id,
+            quantity: 1,
+            action: 'reserve'
+          })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          error(data.message || 'Failed to add item to cart')
+          return
+        }
+      } catch (err) {
+        // Fallback to local-only cart for admin sales
+        console.warn('Stock reservation failed, proceeding with local cart only')
+      }
+      
+      // Update local cart state
+      if (existingItem) {
         setCart(cart.map(item =>
           item.product._id === product._id
             ? { ...item, quantity: item.quantity + 1 }
@@ -145,16 +186,23 @@ export default function SalesPage() {
         ))
         success(`Added ${product.name} to cart (${existingItem.quantity + 1})`)
       } else {
-        error(`Not enough stock available for ${product.name}. Available: ${availableStock}`)
-      }
-    } else {
-      const availableStock = product.availableQuantity || product.quantity || 0
-      if (availableStock > 0) {
         setCart([...cart, { product, quantity: 1 }])
         success(`${product.name} added to cart!`)
-      } else {
-        error(`${product.name} is out of stock`)
       }
+      
+      // Update product in local state to reflect reduced available quantity
+      setProducts(prevProducts => 
+        prevProducts.map(p => 
+          p._id === product._id 
+            ? { ...p, availableQuantity: (p.availableQuantity || p.quantity) - 1 }
+            : p
+        )
+      )
+      
+    } catch (err) {
+      error('Failed to add item to cart. Please try again.')
+    } finally {
+      setAddingToCart(null)
     }
   }
 
@@ -570,14 +618,23 @@ export default function SalesPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="font-semibold text-gray-900 dark:text-slate-100 text-lg">₱{product.price.toFixed(2)}</span>
-                        <p className="text-sm text-gray-600 dark:text-slate-400">Stock: {product.quantity}</p>
+                        <p className="text-sm text-gray-600 dark:text-slate-400">Available: {product.availableQuantity || product.quantity}</p>
                       </div>
                       <button
                         onClick={() => addToCart(product)}
-                        disabled={product.quantity === 0}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                        disabled={(product.availableQuantity || product.quantity) === 0 || addingToCart === product._id}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors relative"
                       >
-                        {product.quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
+                        {addingToCart === product._id ? (
+                          <div className="flex items-center justify-center">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Adding...
+                          </div>
+                        ) : (product.availableQuantity || product.quantity) === 0 ? (
+                          'Out of Stock'
+                        ) : (
+                          'Add to Cart'
+                        )}
                       </button>
                     </div>
                   </div>

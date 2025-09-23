@@ -123,6 +123,14 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
 
   const addToCart = (product: Product) => {
     const existingItem = cart.find(item => item.product._id === product._id)
+    const currentCartQuantity = existingItem ? existingItem.quantity : 0
+    const availableStock = product.availableQuantity || product.quantity || 0
+    
+    // Check if we can add one more item
+    if (currentCartQuantity >= availableStock) {
+      alert(`Cannot add more ${product.name}. Available stock: ${availableStock}`)
+      return
+    }
     
     if (existingItem) {
       setCart(cart.map(item =>
@@ -139,6 +147,15 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
     if (newQuantity === 0) {
       setCart(cart.filter(item => item.product._id !== productId))
     } else {
+      // Validate stock availability
+      const product = products.find(p => p._id === productId)
+      const availableStock = product ? (product.availableQuantity || product.quantity || 0) : 0
+      
+      if (newQuantity > availableStock) {
+        alert(`Cannot set quantity to ${newQuantity}. Available stock: ${availableStock}`)
+        return
+      }
+      
       setCart(cart.map(item =>
         item.product._id === productId
           ? { ...item, quantity: newQuantity }
