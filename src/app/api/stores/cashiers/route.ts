@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectToDatabase from '@/lib/mongodb'
 import Store from '@/models/Store'
-import { authenticateAdminRequest } from '@/lib/auth'
+import { authenticateRequest } from '@/lib/auth'
 
-// PUT /api/stores/cashiers - Update cashiers list (admin only)
+// PUT /api/stores/cashiers - Update cashiers list
 export async function PUT(request: NextRequest) {
   try {
-    const authContext = await authenticateAdminRequest(request)
+    const authContext = await authenticateRequest(request)
     
     if (!authContext) {
       return NextResponse.json(
-        { message: 'Admin access required' },
-        { status: 403 }
+        { message: 'Authentication required' },
+        { status: 401 }
       )
     }
 

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectToDatabase from '@/lib/mongodb'
 import User from '@/models/User'
-import { authenticateAdminRequest } from '@/lib/auth'
+import { authenticateRequest } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify admin authentication
-    const authContext = await authenticateAdminRequest(request)
+    // Verify authentication
+    const authContext = await authenticateRequest(request)
     if (!authContext) {
-      return NextResponse.json({ message: 'Admin access required' }, { status: 403 })
+      return NextResponse.json({ message: 'Authentication required' }, { status: 401 })
     }
 
     await connectToDatabase()
