@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     }
     
     const products = await Product.find(query)
-      .select('name price quantity totalQuantity availableQuantity reservedQuantity description category imageUrl')
+      .select('name price quantity totalQuantity availableQuantity reservedQuantity description category seller imageUrl')
       .limit(limit)
       .skip((page - 1) * limit)
       .sort({ name: 1 })

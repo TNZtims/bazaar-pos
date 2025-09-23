@@ -12,6 +12,7 @@ export interface IProduct extends Document {
   description?: string
   category?: string
   sku?: string
+  seller?: string            // Seller/supplier name
   imageUrl?: string
   storeId: mongoose.Types.ObjectId
   createdBy?: mongoose.Types.ObjectId
@@ -78,6 +79,11 @@ const productSchema = new mongoose.Schema({
     unique: true,
     sparse: true,
     trim: true
+  },
+  seller: {
+    type: String,
+    trim: true,
+    maxlength: 100
   },
   imageUrl: {
     type: String,

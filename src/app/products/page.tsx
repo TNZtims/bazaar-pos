@@ -20,6 +20,7 @@ interface Product {
   description?: string
   category?: string
   sku?: string
+  seller?: string            // Seller/supplier name
   imageUrl?: string
   createdAt: string
 }
@@ -57,6 +58,7 @@ export default function ProductsPage() {
     description: '',
     category: '',
     sku: '',
+    seller: '',
     imageUrl: ''
   })
 
@@ -106,7 +108,7 @@ export default function ProductsPage() {
         
         setShowModal(false)
         setEditingProduct(null)
-        setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), imageUrl: '' })
+        setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '' })
         
         // Refresh products list
         await fetchProducts()
@@ -131,6 +133,7 @@ export default function ProductsPage() {
       description: product.description || '',
       category: product.category || '',
       sku: product.sku || '',
+      seller: product.seller || '',
       imageUrl: product.imageUrl || ''
     })
     setShowModal(true)
@@ -312,6 +315,9 @@ export default function ProductsPage() {
                     <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Category
                     </th>
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                      Seller
+                    </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Actions
                     </th>
@@ -378,6 +384,9 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                         {product.category || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
+                        {product.seller || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                         <button
@@ -452,6 +461,10 @@ export default function ProductsPage() {
                             </div>
                           )}
                         </div>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-gray-500 dark:text-slate-400">Seller:</span>
+                        <span className="ml-1 font-medium text-gray-900 dark:text-slate-100">{product.seller || '-'}</span>
                       </div>
                     </div>
 
@@ -564,8 +577,22 @@ export default function ProductsPage() {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                    SKU
+                    Seller
                   </label>
+                  <input
+                    type="text"
+                    value={formData.seller}
+                    onChange={(e) => setFormData({ ...formData, seller: e.target.value })}
+                    placeholder="Seller/supplier name"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  SKU
+                </label>
                   <div className="flex space-x-2">
                     <input
                       type="text"
