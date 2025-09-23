@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     await connectToDatabase()
     
     const body = await request.json()
-    const { name, price, cost, quantity, totalQuantity, description, category, sku, imageUrl } = body
+    const { name, price, cost, quantity, totalQuantity, description, category, sku, seller, imageUrl } = body
     
     // Use totalQuantity if provided, otherwise fall back to quantity for backward compatibility
     const finalQuantity = totalQuantity !== undefined ? totalQuantity : quantity
@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
       description,
       category,
       sku,
+      seller,
       imageUrl,
       storeId: authContext.store._id
     })

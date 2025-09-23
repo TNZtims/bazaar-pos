@@ -56,7 +56,7 @@ export async function PUT(
     await connectToDatabase()
     
     const body = await request.json()
-    const { name, price, quantity, totalQuantity, description, category, sku, cost, imageUrl } = body
+    const { name, price, quantity, totalQuantity, description, category, sku, cost, seller, imageUrl } = body
     
     // Use totalQuantity if provided, otherwise fall back to quantity for backward compatibility
     const finalQuantity = totalQuantity !== undefined ? totalQuantity : quantity
@@ -72,6 +72,7 @@ export async function PUT(
         category, 
         sku, 
         cost, 
+        seller,
         imageUrl 
       },
       { new: true, runValidators: true }

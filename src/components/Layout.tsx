@@ -41,7 +41,8 @@ const Layout = ({ children }: LayoutProps) => {
     { name: 'Orders', href: '/orders', icon: '📋', gradient: 'from-purple-500 to-indigo-600' },
     ...(store?.isAdmin ? [
       { name: 'Users', href: '/users', icon: '👥', gradient: 'from-cyan-500 to-blue-600' },
-      { name: 'Cashiers', href: '/cashiers', icon: '💼', gradient: 'from-emerald-500 to-teal-600' }
+      { name: 'Cashiers', href: '/cashiers', icon: '💼', gradient: 'from-emerald-500 to-teal-600' },
+      { name: 'Store Management', href: '/admin/stores', icon: '🏪', gradient: 'from-violet-500 to-purple-600' }
     ] : []),
     { name: 'Sales History', href: '/sales/history', icon: '📊', gradient: 'from-indigo-500 to-purple-600' },
     { name: 'Reports', href: '/reports', icon: '📈', gradient: 'from-pink-500 to-rose-600' },
