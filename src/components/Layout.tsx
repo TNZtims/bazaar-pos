@@ -23,6 +23,40 @@ const Layout = ({ children }: LayoutProps) => {
     success('Logged out successfully')
   }
 
+  const getPublicStoreUrl = () => {
+    const baseUrl = window.location.origin
+    return `${baseUrl}/public/${store?.id}/shop`
+  }
+
+  const handleVisitPublicStore = () => {
+    const publicUrl = getPublicStoreUrl()
+    window.open(publicUrl, '_blank')
+  }
+
+  const handleCopyPublicLink = async () => {
+    try {
+      const publicUrl = getPublicStoreUrl()
+      await navigator.clipboard.writeText(publicUrl)
+      success('Store link copied to clipboard!')
+    } catch (err) {
+      console.error('Failed to copy link:', err)
+      // Fallback for older browsers
+      const publicUrl = getPublicStoreUrl()
+      const textArea = document.createElement('textarea')
+      textArea.value = publicUrl
+      document.body.appendChild(textArea)
+      textArea.select()
+      try {
+        document.execCommand('copy')
+        success('Store link copied to clipboard!')
+      } catch (fallbackErr) {
+        console.error('Fallback copy failed:', fallbackErr)
+        success(`Store link: ${publicUrl}`)
+      }
+      document.body.removeChild(textArea)
+    }
+  }
+
   // Don't render theme-dependent content until mounted
   if (!mounted) {
     return (
@@ -154,12 +188,35 @@ const Layout = ({ children }: LayoutProps) => {
                     <p className="text-xs text-slate-500 dark:text-slate-400 truncate">Admin: {store?.isAdmin ? 'Yes' : 'No'}</p>
                   </div>
                 </div>
-                <button
-                  onClick={handleLogout}
-                  className="mt-3 w-full text-xs text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                >
-                  Sign Out
-                </button>
+                
+                {/* Public Store Link Buttons */}
+                <div className="mt-3 space-y-2">
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleVisitPublicStore}
+                      className="flex-1 text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md transition-colors flex items-center justify-center space-x-1"
+                      title="Visit your public store"
+                    >
+                      <span>🏪</span>
+                      <span>Visit Store</span>
+                    </button>
+                    <button
+                      onClick={handleCopyPublicLink}
+                      className="flex-1 text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-md transition-colors flex items-center justify-center space-x-1"
+                      title="Copy store link"
+                    >
+                      <span>📋</span>
+                      <span>Copy Link</span>
+                    </button>
+                  </div>
+                  
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-xs text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                  >
+                    Sign Out
+                  </button>
+                </div>
               </div>
             </div>
           </div>
