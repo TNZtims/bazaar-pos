@@ -13,7 +13,7 @@ const userSchema = new mongoose.Schema({
   customId: {
     type: String,
     required: true,
-    unique: true,
+    // unique: true,
     trim: true,
     maxlength: 50
   },
