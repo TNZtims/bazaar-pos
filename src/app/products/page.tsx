@@ -246,7 +246,7 @@ export default function ProductsPage() {
 
   const openAddModal = () => {
     setEditingProduct(null)
-    setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), imageUrl: '' })
+    setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '' })
     setShowModal(true)
   }
 
@@ -593,7 +593,7 @@ export default function ProductsPage() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                   SKU
                 </label>
-                  <div className="flex space-x-2">
+                <div className="flex space-x-2">
                     <input
                       type="text"
                       value={formData.sku}
@@ -608,11 +608,10 @@ export default function ProductsPage() {
                     >
                       🔄
                     </button>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                    Auto-generated SKU. Click 🔄 to generate a new one.
-                  </p>
                 </div>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                  Auto-generated SKU. Click 🔄 to generate a new one.
+                </p>
               </div>
 
               {/* Product Image Upload */}
@@ -662,18 +661,19 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={confirmModal.isOpen}
-        onClose={closeConfirmation}
-        onConfirm={confirmModal.onConfirm}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        type={confirmModal.type}
-        confirmText={confirmModal.confirmText}
-        cancelText={confirmModal.cancelText}
-      />
-    </Layout>
+          {/* Confirmation Modal */}
+          <ConfirmationModal
+            isOpen={confirmModal.isOpen}
+            onClose={closeConfirmation}
+            onConfirm={confirmModal.onConfirm}
+            title={confirmModal.title}
+            message={confirmModal.message}
+            type={confirmModal.type}
+            confirmText={confirmModal.confirmText}
+            cancelText={confirmModal.cancelText}
+          />
+        {/* </div> */}
+      </Layout>
     </ProtectedRoute>
   )
 }
