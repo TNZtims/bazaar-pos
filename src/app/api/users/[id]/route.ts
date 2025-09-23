@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectToDatabase from '@/lib/mongodb'
 import User from '@/models/User'
-import { authenticateAdminRequest } from '@/lib/auth'
+import { authenticateRequest } from '@/lib/auth'
 
 // GET /api/users/[id] - Get single user (admin only)
 export async function GET(
@@ -9,12 +9,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authContext = await authenticateAdminRequest(request)
+    const authContext = await authenticateRequest(request)
     
     if (!authContext) {
       return NextResponse.json(
-        { message: 'Admin access required' },
-        { status: 403 }
+        { message: 'Authentication required' },
+        { status: 401 }
       )
     }
 
@@ -49,12 +49,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authContext = await authenticateAdminRequest(request)
+    const authContext = await authenticateRequest(request)
     
     if (!authContext) {
       return NextResponse.json(
-        { message: 'Admin access required' },
-        { status: 403 }
+        { message: 'Authentication required' },
+        { status: 401 }
       )
     }
 
@@ -96,12 +96,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authContext = await authenticateAdminRequest(request)
+    const authContext = await authenticateRequest(request)
     
     if (!authContext) {
       return NextResponse.json(
-        { message: 'Admin access required' },
-        { status: 403 }
+        { message: 'Authentication required' },
+        { status: 401 }
       )
     }
 
