@@ -68,9 +68,20 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Customer name search
+    // Customer name or Order ID search
     if (search) {
-      query.customerName = { $regex: search, $options: 'i' }
+      // Try to search by Order ID first (if it looks like a MongoDB ObjectId)
+      if (search.length === 24 && /^[0-9a-fA-F]{24}$/.test(search)) {
+        query._id = search
+      } else {
+        // Search by customer name, phone, or partial order ID
+        query.$or = [
+          { customerName: { $regex: search, $options: 'i' } },
+          { customerPhone: { $regex: search, $options: 'i' } },
+          { customerEmail: { $regex: search, $options: 'i' } },
+          { _id: { $regex: search, $options: 'i' } } // Partial ID search
+        ]
+      }
     }
     
     // Sort options
@@ -157,10 +168,10 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      if (product.availableQuantity < item.quantity) {
+      if (product.quantity < item.quantity) {
         return NextResponse.json(
           { 
-            message: `Insufficient stock for ${product.name}. Available: ${product.availableQuantity}, Total: ${product.totalQuantity}, Reserved: ${product.reservedQuantity}` 
+            message: `Insufficient stock for ${product.name}. Available: ${product.quantity}` 
           },
           { status: 400 }
         )
@@ -240,33 +251,31 @@ export async function POST(request: NextRequest) {
           
           savedSale = await sale.save({ session })
           
-          // Update product quantities - ALL orders immediately reduce available stock
+          // Update product quantities with proper reservation handling
           for (const item of items) {
-            if (paymentStatus === 'paid') {
-              // Immediate sale - deduct from total quantity directly
-              const updateResult = await Product.findOneAndUpdate(
-                { _id: item.productId, storeId: authContext.store._id },
-                { $inc: { totalQuantity: -item.quantity } },
-                { session, new: true }
-              )
-              
-              // Double-check that we didn't go below zero
-              if (updateResult && updateResult.totalQuantity < 0) {
-                throw new Error(`Product ${updateResult.name} would have negative stock after sale`)
-              }
-            } else {
-              // Pending/partial payment - still reduce from total quantity to prevent overselling
-              // This ensures accurate inventory tracking regardless of payment status
-              const updateResult = await Product.findOneAndUpdate(
-                { _id: item.productId, storeId: authContext.store._id },
-                { $inc: { totalQuantity: -item.quantity } },
-                { session, new: true }
-              )
-              
-              // Double-check that we didn't go below zero
-              if (updateResult && updateResult.totalQuantity < 0) {
-                throw new Error(`Product ${updateResult.name} would have negative stock after sale`)
-              }
+            // For admin sales, items might have been reserved through cart or might be direct sales
+            // We need to handle both cases atomically
+            
+            // Reduce stock (simplified schema)
+            const updateResult = await Product.findOneAndUpdate(
+              { 
+                _id: item.productId, 
+                storeId: authContext.store._id,
+                quantity: { $gte: item.quantity } // Ensure we have enough stock
+              },
+              { 
+                $inc: { quantity: -item.quantity } // Reduce stock
+              },
+              { session, new: true }
+            )
+            
+            if (!updateResult) {
+              throw new Error(`Insufficient stock for product ${item.productId}. Required: ${item.quantity}`)
+            }
+            
+            // Double-check that we didn't go below zero
+            if (updateResult.totalQuantity < 0) {
+              throw new Error(`Product ${updateResult.name} would have negative stock after sale`)
             }
           }
         })
@@ -320,12 +329,32 @@ export async function POST(request: NextRequest) {
       
       savedSale = await sale.save()
       
-      // Update product quantities - ALL orders immediately reduce available stock (without transaction)
+      // Update product quantities with proper reservation handling (without transaction)
       for (const item of items) {
-        // All orders reduce total quantity immediately to prevent overselling
+        // Handle both reserved and direct sales atomically
         const updateResult = await Product.findOneAndUpdate(
-          { _id: item.productId, storeId: authContext.store._id },
-          { $inc: { totalQuantity: -item.quantity } },
+          { 
+            _id: item.productId, 
+            storeId: authContext.store._id,
+            totalQuantity: { $gte: item.quantity } // Ensure we have enough total stock
+          },
+          [
+            {
+              $set: {
+                // Calculate how much reserved stock to release (min of requested quantity and current reserved)
+                reservedToRelease: { $min: ['$reservedQuantity', item.quantity] },
+                totalQuantity: { $subtract: ['$totalQuantity', item.quantity] }
+              }
+            },
+            {
+              $set: {
+                reservedQuantity: { $subtract: ['$reservedQuantity', '$reservedToRelease'] }
+              }
+            },
+            {
+              $unset: 'reservedToRelease' // Clean up temporary field
+            }
+          ],
           { new: true }
         )
         
@@ -336,6 +365,21 @@ export async function POST(request: NextRequest) {
         }
       }
       
+    }
+    
+    // Broadcast inventory updates via WebSocket for all affected products
+    if ((global as any).io) {
+      for (const item of items) {
+        // Fetch updated product to get current quantities
+        const updatedProduct = await Product.findById(item.productId)
+        if (updatedProduct) {
+          (global as any).io.to(`store-${String(authContext.store._id)}`).emit('inventory-changed', {
+            productId: updatedProduct._id.toString(),
+            quantity: updatedProduct.quantity,
+            timestamp: new Date().toISOString()
+          })
+        }
+      }
     }
     
     return NextResponse.json(savedSale, { status: 201 })

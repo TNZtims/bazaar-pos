@@ -66,15 +66,15 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// GET /api/stores/cashiers - Get cashiers list (admin only)
+// GET /api/stores/cashiers - Get cashiers list
 export async function GET(request: NextRequest) {
   try {
-    const authContext = await authenticateAdminRequest(request)
+    const authContext = await authenticateRequest(request)
     
     if (!authContext) {
       return NextResponse.json(
-        { message: 'Admin access required' },
-        { status: 403 }
+        { message: 'Authentication required' },
+        { status: 401 }
       )
     }
 

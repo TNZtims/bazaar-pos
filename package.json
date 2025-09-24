@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "node server.js",
+    "dev-next": "next dev --turbopack",
     "build": "next build --turbopack",
-    "start": "next start",
+    "start": "node server.js",
     "lint": "eslint",
     "setup": "tsx scripts/setup-env.ts",
     "type-check": "tsc --noEmit",
@@ -25,6 +26,8 @@
     "next": "15.5.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "uuid": "^13.0.0",
     "xlsx": "^0.18.5"
   },

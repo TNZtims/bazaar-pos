@@ -99,9 +99,9 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      if (product.availableQuantity < item.quantity) {
+      if (product.quantity < item.quantity) {
         return NextResponse.json(
-          { message: `Insufficient stock for ${product.name}. Available: ${product.availableQuantity}, Total: ${product.totalQuantity}, Reserved: ${product.reservedQuantity}` },
+          { message: `Insufficient stock for ${product.name}. Available: ${product.quantity}` },
           { status: 400 }
         )
       }
@@ -142,22 +142,22 @@ export async function POST(request: NextRequest) {
     
     const savedOrder = await order.save()
     
-    // Convert reserved stock to confirmed sale - reduce total quantity and reserved quantity
-    // The availableQuantity will be automatically updated by the Product middleware
-    for (const item of validatedItems) {
-      const product = await Product.findByIdAndUpdate(
-        item.product,
-        { 
-          $inc: { 
-            totalQuantity: -item.quantity,
-            reservedQuantity: -item.quantity  // Release the reservation since it's now a confirmed order
-          }
-        },
-        { new: true }
-      )
-      
-      if (!product) {
-        console.error(`Failed to update product ${item.product} after order creation`)
+    // Since cart items were already reserved (quantity reduced), 
+    // placing order doesn't need to reduce quantity again.
+    // The quantity was already decremented when items were added to cart via reserve API
+    
+    // Broadcast inventory updates via WebSocket
+    if ((global as any).io) {
+      for (const item of validatedItems) {
+        // Fetch updated product to get current quantities
+        const updatedProduct = await Product.findById(item.product)
+        if (updatedProduct) {
+          (global as any).io.to(`store-${String(customerAuth.store._id)}`).emit('inventory-changed', {
+            productId: updatedProduct._id.toString(),
+            quantity: updatedProduct.quantity,
+            timestamp: new Date().toISOString()
+          })
+        }
       }
     }
     
@@ -228,20 +228,38 @@ export async function DELETE(request: NextRequest) {
       )
     }
     
-    // Restore product quantities (both total and reserved)
+    // Restore product quantities using atomic operations
+    const updatedProducts = []
     for (const item of order.items) {
-      const product = await Product.findById(item.product)
-      if (product) {
-        // Add back to total quantity and reduce reserved quantity
-        await Product.findByIdAndUpdate(
-          item.product,
-          { 
-            $inc: { 
-              totalQuantity: item.quantity,
-              reservedQuantity: -item.quantity 
-            }
+      // Use atomic operation to restore stock
+      const updateResult = await Product.findOneAndUpdate(
+        { 
+          _id: item.product,
+          storeId: customerAuth.store._id
+        },
+        { 
+          $inc: { 
+            quantity: item.quantity // Restore the stock that was deducted
           }
-        )
+        },
+        { new: true }
+      )
+      
+      if (!updateResult) {
+        console.error(`Failed to restore stock for product ${item.product} during order deletion`)
+      } else {
+        updatedProducts.push(updateResult)
+      }
+    }
+    
+    // Broadcast inventory updates via WebSocket
+    if ((global as any).io && updatedProducts.length > 0) {
+      for (const product of updatedProducts) {
+        (global as any).io.to(`store-${customerAuth.store._id}`).emit('inventory-changed', {
+          productId: product._id.toString(),
+          quantity: product.quantity,
+          timestamp: new Date().toISOString()
+        })
       }
     }
     

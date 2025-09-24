@@ -7,6 +7,8 @@ import ImageUpload from '@/components/ImageUpload'
 import { deleteImageFromS3 } from '@/lib/s3'
 import { useToast } from '@/contexts/ToastContext'
 import { ConfirmationModal } from '@/components/Modal'
+import { useAuth } from '@/contexts/AuthContext'
+import { useWebSocketInventory } from '@/hooks/useWebSocketInventory'
 
 interface Product {
   _id: string
@@ -17,6 +19,7 @@ interface Product {
   totalQuantity: number      // Total stock
   availableQuantity: number  // Available for sale
   reservedQuantity: number   // Reserved for pending orders
+  availableForPreorder: boolean // Whether item is available for preorder
   description?: string
   category?: string
   sku?: string
@@ -27,8 +30,22 @@ interface Product {
 
 export default function ProductsPage() {
   const { success, error } = useToast()
+  const { store } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  
+  // Real-time inventory updates via WebSocket
+  const { 
+    updates: inventoryUpdates, 
+    deletedProducts,
+    isConnected: isWebSocketConnected,
+    error: webSocketError
+  } = useWebSocketInventory({
+    storeId: store?.id || null,
+    enabled: !!store?.id
+  })
+  const [submitting, setSubmitting] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -59,12 +76,40 @@ export default function ProductsPage() {
     category: '',
     sku: '',
     seller: '',
-    imageUrl: ''
+    imageUrl: '',
+    availableForPreorder: false
   })
 
   useEffect(() => {
     fetchProducts()
   }, [searchTerm])
+
+  // Apply real-time inventory updates to products
+  useEffect(() => {
+    if (inventoryUpdates.length > 0) {
+      setProducts(prevProducts => 
+        prevProducts.map(product => {
+          const update = inventoryUpdates.find(u => u.productId === product._id)
+          if (update) {
+            return {
+              ...product,
+              quantity: update.quantity ?? product.quantity
+            }
+          }
+          return product
+        })
+      )
+    }
+  }, [inventoryUpdates])
+
+  // Handle product deletions
+  useEffect(() => {
+    if (deletedProducts.length > 0) {
+      setProducts(prevProducts => 
+        prevProducts.filter(product => !deletedProducts.includes(product._id))
+      )
+    }
+  }, [deletedProducts])
 
   const fetchProducts = async () => {
     try {
@@ -84,6 +129,7 @@ export default function ProductsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setSubmitting(true)
     
     try {
       const productData = {
@@ -108,7 +154,7 @@ export default function ProductsPage() {
         
         setShowModal(false)
         setEditingProduct(null)
-        setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '' })
+        setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '', availableForPreorder: false })
         
         // Refresh products list
         await fetchProducts()
@@ -120,6 +166,8 @@ export default function ProductsPage() {
     } catch (err) {
       console.error('Error saving product:', err)
       error('Error saving product', 'Save Failed')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -134,7 +182,8 @@ export default function ProductsPage() {
       category: product.category || '',
       sku: product.sku || '',
       seller: product.seller || '',
-      imageUrl: product.imageUrl || ''
+      imageUrl: product.imageUrl || '',
+      availableForPreorder: product.availableForPreorder || false
     })
     setShowModal(true)
   }
@@ -168,8 +217,9 @@ export default function ProductsPage() {
 
     showConfirmation(
       'Delete Product',
-      `Are you sure you want to delete "${product.name}"?\n\nPrice: ₱${product.price.toFixed(2)}\nStock: ${product.availableQuantity !== undefined ? product.availableQuantity : product.quantity} available${product.totalQuantity !== undefined ? ` (${product.totalQuantity} total, ${product.reservedQuantity || 0} reserved)` : ' units'}\n\nThis action cannot be undone.`,
+      `Are you sure you want to delete "${product.name}"?\n\nPrice: ₱${product.price.toFixed(2)}\nStock: ${product.quantity} units\n\nThis action cannot be undone.`,
       async () => {
+        setDeleting(id)
         try {
           // Delete from database first
           const response = await fetch(`/api/products/${id}`, { method: 'DELETE' })
@@ -193,10 +243,12 @@ export default function ProductsPage() {
         } catch (err) {
           console.error('Error deleting product:', err)
           error('Error deleting product', 'Delete Failed')
+        } finally {
+          setDeleting(null)
         }
       },
       'danger',
-      'Delete Product',
+      deleting === id ? 'Deleting...' : 'Delete Product',
       'Keep Product'
     )
   }
@@ -246,7 +298,7 @@ export default function ProductsPage() {
 
   const openAddModal = () => {
     setEditingProduct(null)
-    setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '' })
+    setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '', availableForPreorder: false })
     setShowModal(true)
   }
 
@@ -270,13 +322,29 @@ export default function ProductsPage() {
 
         {/* Search */}
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-4">
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <div className="flex gap-3 items-center">
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {/* WebSocket Connection Status */}
+            <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 dark:bg-slate-700 rounded-lg">
+              <div 
+                className={`w-2 h-2 rounded-full ${
+                  isWebSocketConnected ? 'bg-green-500' : 'bg-red-500'
+                }`}
+                title={isWebSocketConnected ? 'Connected to real-time updates' : 'Disconnected from real-time updates'}
+              />
+              <span className={`text-sm ${
+                isWebSocketConnected ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+              }`}>
+                {isWebSocketConnected ? 'Live' : 'Offline'}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Products Grid */}
@@ -317,6 +385,9 @@ export default function ProductsPage() {
                     </th>
                     <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Seller
+                    </th>
+                    <th className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                      Preorder
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Actions
@@ -388,6 +459,15 @@ export default function ProductsPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                         {product.seller || '-'}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          product.availableForPreorder 
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400' 
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-400'
+                        }`}>
+                          {product.availableForPreorder ? 'Yes' : 'No'}
+                        </span>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                         <button
                           onClick={() => handleEdit(product)}
@@ -397,9 +477,10 @@ export default function ProductsPage() {
                         </button>
                         <button
                           onClick={() => handleDelete(product._id)}
-                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                          disabled={deleting === product._id}
+                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Delete
+                          {deleting === product._id ? 'Deleting...' : 'Delete'}
                         </button>
                       </td>
                     </tr>
@@ -466,6 +547,16 @@ export default function ProductsPage() {
                         <span className="text-gray-500 dark:text-slate-400">Seller:</span>
                         <span className="ml-1 font-medium text-gray-900 dark:text-slate-100">{product.seller || '-'}</span>
                       </div>
+                      <div className="col-span-2">
+                        <span className="text-gray-500 dark:text-slate-400">Preorder:</span>
+                        <span className={`ml-1 px-2 py-1 text-xs font-semibold rounded-full ${
+                          product.availableForPreorder 
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400' 
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-400'
+                        }`}>
+                          {product.availableForPreorder ? 'Available' : 'Not Available'}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="flex justify-between items-center">
@@ -481,9 +572,10 @@ export default function ProductsPage() {
                         </button>
                         <button
                           onClick={() => handleDelete(product._id)}
-                          className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm font-medium touch-manipulation px-3 py-2"
+                          disabled={deleting === product._id}
+                          className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm font-medium touch-manipulation px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Delete
+                          {deleting === product._id ? 'Deleting...' : 'Delete'}
                         </button>
                       </div>
                     </div>
@@ -589,6 +681,20 @@ export default function ProductsPage() {
                 </div>
               </div>
               
+              {/* Preorder Availability */}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="availableForPreorder"
+                  checked={formData.availableForPreorder}
+                  onChange={(e) => setFormData({ ...formData, availableForPreorder: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                />
+                <label htmlFor="availableForPreorder" className="text-sm font-medium text-gray-700 dark:text-slate-300">
+                  Available for Preorder
+                </label>
+              </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                   SKU
@@ -651,9 +757,17 @@ export default function ProductsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                  disabled={submitting}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
-                  {editingProduct ? 'Update' : 'Add'} Product
+                  {submitting ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      {editingProduct ? 'Updating...' : 'Adding...'}
+                    </div>
+                  ) : (
+                    `${editingProduct ? 'Update' : 'Add'} Product`
+                  )}
                 </button>
               </div>
             </form>

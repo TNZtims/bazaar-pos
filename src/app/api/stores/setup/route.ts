@@ -55,13 +55,14 @@ export async function POST(request: NextRequest) {
     const salt = await bcrypt.genSalt(12)
     const hashedPassword = await bcrypt.hash(password, salt)
     
-    // Create store
+    // Create store with default values for new fields
     const store = new Store({
       storeName,
       password: hashedPassword,
       isAdmin,
       isActive: true,
-      cashiers: Array.isArray(cashiers) ? cashiers : []
+      cashiers: Array.isArray(cashiers) ? cashiers : [],
+      isOnline: true // Default to online
     })
     
     const savedStore = await store.save()

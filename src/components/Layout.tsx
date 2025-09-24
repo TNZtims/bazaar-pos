@@ -25,15 +25,31 @@ const Layout = ({ children }: LayoutProps) => {
 
   const getPublicStoreUrl = () => {
     const baseUrl = window.location.origin
-    return `${baseUrl}/public/${store?.id}/shop`
+    // Check if store name exists
+    if (!store?.storeName) {
+      console.error('Store name not available:', store)
+      return `${baseUrl}/`
+    }
+    // URL encode the store name to handle special characters and spaces
+    const encodedStoreName = encodeURIComponent(store.storeName)
+    return `${baseUrl}/${encodedStoreName}/shop`
   }
 
   const handleVisitPublicStore = () => {
+    if (!store?.storeName) {
+      error('Store information not available. Please refresh the page.')
+      return
+    }
     const publicUrl = getPublicStoreUrl()
     window.open(publicUrl, '_blank')
   }
 
   const handleCopyPublicLink = async () => {
+    if (!store?.storeName) {
+      error('Store information not available. Please refresh the page.')
+      return
+    }
+    
     try {
       const publicUrl = getPublicStoreUrl()
       await navigator.clipboard.writeText(publicUrl)
@@ -73,6 +89,7 @@ const Layout = ({ children }: LayoutProps) => {
     { name: 'Products', href: '/products', icon: '📦', gradient: 'from-green-500 to-teal-600' },
     { name: 'Sales', href: '/sales', icon: '💰', gradient: 'from-yellow-500 to-orange-600' },
     { name: 'Orders', href: '/orders', icon: '📋', gradient: 'from-purple-500 to-indigo-600' },
+    { name: 'Preorders', href: '/preorders', icon: '📋', gradient: 'from-orange-500 to-red-600' },
     { name: 'Users', href: '/users', icon: '👥', gradient: 'from-cyan-500 to-blue-600' },
     { name: 'Cashiers', href: '/cashiers', icon: '💼', gradient: 'from-emerald-500 to-teal-600' },
     ...(store?.isAdmin ? [
@@ -80,6 +97,7 @@ const Layout = ({ children }: LayoutProps) => {
     ] : []),
     { name: 'Sales History', href: '/sales/history', icon: '📊', gradient: 'from-indigo-500 to-purple-600' },
     { name: 'Reports', href: '/reports', icon: '📈', gradient: 'from-pink-500 to-rose-600' },
+    { name: 'Settings', href: '/settings', icon: '⚙️', gradient: 'from-gray-500 to-slate-600' },
   ]
 
   return (
@@ -117,7 +135,7 @@ const Layout = ({ children }: LayoutProps) => {
           ${sidebarOpen ? 'block' : 'hidden'} lg:block
           fixed lg:sticky top-16 lg:top-0 inset-y-0 left-0 z-40 lg:z-0 h-[calc(100vh-4rem)] lg:h-screen w-72
         `}>
-          <div className="h-full lg:h-screen backdrop-blur-md bg-white/95 dark:bg-slate-900/95 border-r border-slate-200/50 dark:border-slate-700/50 shadow-lg lg:shadow-none overflow-y-auto">
+          <div className="h-full lg:h-screen backdrop-blur-md bg-white/95 dark:bg-slate-900/95 border-r border-slate-200/50 dark:border-slate-700/50 shadow-lg lg:shadow-none flex flex-col">
             {/* Logo */}
             <div className="hidden lg:flex items-center justify-between px-6 py-6 border-b border-slate-200/50 dark:border-slate-700/50">
               <div className="flex items-center space-x-3">
@@ -133,7 +151,7 @@ const Layout = ({ children }: LayoutProps) => {
             </div>
 
             {/* Navigation */}
-            <nav className="mt-6 lg:mt-0 px-4">
+            <nav className="mt-6 lg:mt-0 px-4 flex-1 overflow-y-auto">
               <div className="space-y-2">
                 {navigation.map((item, index) => {
                   const isActive = pathname === item.href
@@ -177,7 +195,7 @@ const Layout = ({ children }: LayoutProps) => {
             </nav>
 
             {/* Store info section */}
-            <div className="absolute bottom-4 left-4 right-4">
+            <div className="mt-auto p-4">
               <div className="backdrop-blur-md bg-slate-100/50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-300/30 dark:border-slate-600/30">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">

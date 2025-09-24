@@ -3,14 +3,14 @@ import connectToDatabase from '@/lib/mongodb'
 import Product from '@/models/Product'
 import { authenticateRequest } from '@/lib/auth'
 
-// POST /api/products/admin-reserve - Reserve or release stock for admin cart items
+// POST /api/products/admin-reserve - Reserve or release stock for admin cart items (simplified schema)
 export async function POST(request: NextRequest) {
   try {
     const authContext = await authenticateRequest(request)
     
     if (!authContext) {
       return NextResponse.json(
-        { message: 'Unauthorized' },
+        { message: 'Authentication required' },
         { status: 401 }
       )
     }
@@ -72,71 +72,91 @@ export async function POST(request: NextRequest) {
     }
     
     if (action === 'reserve') {
-      // Check if we have enough available stock to reserve
-      if (product.availableQuantity < quantity) {
+      // Check if we have enough stock (simplified - just check quantity)
+      if (product.quantity < quantity) {
         return NextResponse.json(
           { 
-            message: `Insufficient stock available. Available: ${product.availableQuantity}, Requested: ${quantity}` 
+            message: `Insufficient stock available. Available: ${product.quantity}, Requested: ${quantity}` 
           },
           { status: 400 }
         )
       }
       
-      // Reserve stock by increasing reserved quantity and decreasing available quantity
-      const updatedProduct = await Product.findByIdAndUpdate(
-        productId,
+      // Reserve stock by reducing quantity
+      const updatedProduct = await Product.findOneAndUpdate(
         { 
-          $inc: { 
-            reservedQuantity: quantity,
-            availableQuantity: -quantity 
-          }
+          _id: productId,
+          storeId: authContext.store._id,
+          quantity: { $gte: quantity } // Double-check in atomic operation
+        },
+        { 
+          $inc: { quantity: -quantity }
         },
         { new: true }
       )
+      
+      if (!updatedProduct) {
+        return NextResponse.json(
+          { 
+            message: `Insufficient stock available during reservation` 
+          },
+          { status: 400 }
+        )
+      }
+      
+      // Broadcast inventory update via WebSocket
+      if ((global as any).io) {
+        (global as any).io.to(`store-${String(authContext.store._id)}`).emit('inventory-changed', {
+          productId: updatedProduct._id.toString(),
+          quantity: updatedProduct.quantity,
+          timestamp: new Date().toISOString()
+        })
+      }
       
       return NextResponse.json({
         message: 'Stock reserved successfully',
-        product: {
-          id: updatedProduct._id,
-          name: updatedProduct.name,
-          totalQuantity: updatedProduct.totalQuantity,
-          availableQuantity: updatedProduct.availableQuantity,
-          reservedQuantity: updatedProduct.reservedQuantity
-        }
+        availableQuantity: updatedProduct.quantity
       })
       
     } else if (action === 'release') {
-      // Release reserved stock by decreasing reserved quantity and increasing available quantity
-      // Make sure we don't release more than what's reserved
-      const releaseQuantity = Math.min(quantity, product.reservedQuantity)
-      
-      const updatedProduct = await Product.findByIdAndUpdate(
-        productId,
+      // Release stock by adding back to quantity
+      const updatedProduct = await Product.findOneAndUpdate(
         { 
-          $inc: { 
-            reservedQuantity: -releaseQuantity,
-            availableQuantity: releaseQuantity 
-          }
+          _id: productId,
+          storeId: authContext.store._id
+        },
+        { 
+          $inc: { quantity: quantity }
         },
         { new: true }
       )
       
+      if (!updatedProduct) {
+        return NextResponse.json(
+          { message: 'Failed to release stock' },
+          { status: 400 }
+        )
+      }
+      
+      // Broadcast inventory update via WebSocket
+      if ((global as any).io) {
+        (global as any).io.to(`store-${String(authContext.store._id)}`).emit('inventory-changed', {
+          productId: updatedProduct._id.toString(),
+          quantity: updatedProduct.quantity,
+          timestamp: new Date().toISOString()
+        })
+      }
+      
       return NextResponse.json({
         message: 'Stock released successfully',
-        product: {
-          id: updatedProduct._id,
-          name: updatedProduct.name,
-          totalQuantity: updatedProduct.totalQuantity,
-          availableQuantity: updatedProduct.availableQuantity,
-          reservedQuantity: updatedProduct.reservedQuantity
-        }
+        availableQuantity: updatedProduct.quantity
       })
     }
     
   } catch (error: any) {
-    console.error('Error managing admin stock reservation:', error)
+    console.error('Error in admin reserve/release:', error)
     return NextResponse.json(
-      { message: 'Error managing stock reservation', error: error.message },
+      { message: 'Internal server error', error: error.message },
       { status: 500 }
     )
   }

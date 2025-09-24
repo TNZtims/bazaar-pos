@@ -550,19 +550,37 @@ export async function DELETE(
     }
     
     // Restore product quantities (both total and reserved)
+    const updatedProducts = []
     for (const item of sale.items) {
       const product = await Product.findById(item.product)
       if (product) {
         // Add back to total quantity and reduce reserved quantity
-        await Product.findByIdAndUpdate(
+        const updatedProduct = await Product.findByIdAndUpdate(
           item.product,
           { 
             $inc: { 
               totalQuantity: item.quantity,
               reservedQuantity: -item.quantity 
             }
-          }
+          },
+          { new: true }
         )
+        if (updatedProduct) {
+          updatedProducts.push(updatedProduct)
+        }
+      }
+    }
+    
+    // Broadcast inventory updates via WebSocket
+    if (global.io && updatedProducts.length > 0) {
+      for (const product of updatedProducts) {
+        global.io.to(`store-${String(product.storeId)}`).emit('inventory-changed', {
+          productId: product._id,
+          totalQuantity: product.totalQuantity,
+          availableQuantity: product.availableQuantity,
+          reservedQuantity: product.reservedQuantity,
+          timestamp: new Date().toISOString()
+        })
       }
     }
     

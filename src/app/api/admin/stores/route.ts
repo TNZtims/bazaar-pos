@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     await connectToDatabase()
     
     const stores = await Store.find({})
-      .select('storeName isActive isAdmin cashiers createdAt updatedAt')
+      .select('storeName isActive isAdmin cashiers isOnline storeHours createdAt updatedAt')
       .sort({ createdAt: -1 })
     
     return NextResponse.json({

@@ -51,6 +51,7 @@ export default function OrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [paymentLoading, setPaymentLoading] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -240,6 +241,7 @@ export default function OrdersPage() {
       'Delete Order',
       `Are you sure you want to permanently delete this order?\n\nOrder #${order._id.slice(-6)}\nCustomer: ${order.customerName || 'Walk-in Customer'}\nTotal: ${formatCurrency(order.finalAmount)}\n\nThis action cannot be undone. Reserved stock will be released.`,
       async () => {
+        setDeleting(orderId)
         try {
           const response = await fetch(`/api/sales/${orderId}`, {
             method: 'DELETE'
@@ -256,6 +258,8 @@ export default function OrdersPage() {
         } catch (err) {
           console.error('Error deleting order:', err)
           error('Error deleting order', 'Delete Failed')
+        } finally {
+          setDeleting(null)
         }
       },
       'danger',
@@ -626,7 +630,8 @@ export default function OrdersPage() {
                             {(order.paymentStatus === 'pending' || order.status === 'pending') && (
                               <button
                                 onClick={() => handleDeleteOrder(order._id)}
-                                className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/20 hover:bg-gray-100 dark:hover:bg-gray-900/40 transition-colors"
+                                disabled={deleting === order._id}
+                                className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/20 hover:bg-gray-100 dark:hover:bg-gray-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 title="Delete Order"
                               >
                                 <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -716,7 +721,8 @@ export default function OrdersPage() {
                       {(order.paymentStatus === 'pending' || order.status === 'pending') && (
                         <button
                           onClick={() => handleDeleteOrder(order._id)}
-                          className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/20 hover:bg-gray-100 dark:hover:bg-gray-900/40 transition-colors"
+                          disabled={deleting === order._id}
+                          className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/20 hover:bg-gray-100 dark:hover:bg-gray-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

@@ -6,6 +6,7 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import { useToast } from '@/contexts/ToastContext'
 import { useAuth } from '@/contexts/AuthContext'
 import Modal, { ConfirmationModal } from '@/components/Modal'
+import { useWebSocketInventory } from '@/hooks/useWebSocketInventory'
 
 interface Product {
   _id: string
@@ -16,6 +17,7 @@ interface Product {
   totalQuantity: number
   availableQuantity: number
   reservedQuantity: number
+  availableForPreorder: boolean
   category?: string
   imageUrl?: string
 }
@@ -36,6 +38,19 @@ export default function SalesPage() {
   const [selectedCashier, setSelectedCashier] = useState('')
   const [cartCollapsed, setCartCollapsed] = useState(true)
   const [addingToCart, setAddingToCart] = useState<string | null>(null)
+  const [selectedQuantities, setSelectedQuantities] = useState<{[productId: string]: number}>({})
+  
+  // Real-time inventory updates via WebSocket
+  const { 
+    updates: inventoryUpdates, 
+    deletedProducts,
+    isConnected: isWebSocketConnected,
+    error: webSocketError,
+    broadcastCartUpdate
+  } = useWebSocketInventory({
+    storeId: store?.id || null,
+    enabled: !!store?.id
+  })
   const [imageModal, setImageModal] = useState<{
     isOpen: boolean
     imageUrl: string
@@ -84,8 +99,16 @@ export default function SalesPage() {
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (cart.length > 0) {
-        event.preventDefault()
-        event.returnValue = 'You have items in your cart. Are you sure you want to leave? All cart data will be lost and reserved stock will be released.'
+        const message = 'You have items in your cart. Are you sure you want to leave? All cart data will be lost and reserved stock will be released.'
+        
+        // Save to localStorage for cleanup fallback
+        localStorage.setItem('pendingAdminCartCleanup', JSON.stringify(cart.map(item => ({
+          productId: item.product._id,
+          quantity: item.quantity
+        }))))
+        
+        // Set returnValue to trigger browser confirmation
+        event.returnValue = message
         
         // Release reserved stock using sendBeacon for reliability
         for (const item of cart) {
@@ -95,11 +118,50 @@ export default function SalesPage() {
               quantity: item.quantity,
               action: 'release'
             })
-            navigator.sendBeacon('/api/products/admin-reserve', data)
+            const blob = new Blob([data], { type: 'application/json' })
+            navigator.sendBeacon('/api/products/admin-reserve', blob)
           } catch (err) {
             console.error('Failed to release reserved stock:', err)
           }
         }
+        
+        return message
+      }
+    }
+    
+    // Check for pending admin cart cleanup on page load
+    const pendingCleanup = localStorage.getItem('pendingAdminCartCleanup')
+    if (pendingCleanup) {
+      console.log('🔄 Found pending admin cart cleanup - releasing reserved stock...')
+      try {
+        const cartItems = JSON.parse(pendingCleanup)
+        
+        cartItems.forEach(async (item: any) => {
+          try {
+            const response = await fetch('/api/products/admin-reserve', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                productId: item.productId,
+                quantity: item.quantity,
+                action: 'release'
+              }),
+              credentials: 'include'
+            })
+            
+            if (response.ok) {
+              console.log(`✅ Released ${item.quantity} units for product ${item.productId}`)
+            }
+          } catch (err) {
+            console.error('Failed to release reserved stock from localStorage:', err)
+          }
+        })
+        
+        localStorage.removeItem('pendingAdminCartCleanup')
+        console.log('✅ Admin cart cleanup completed')
+      } catch (err) {
+        console.error('Failed to parse pending admin cart cleanup:', err)
+        localStorage.removeItem('pendingAdminCartCleanup')
       }
     }
 
@@ -153,6 +215,43 @@ export default function SalesPage() {
     setConfirmModal(prev => ({ ...prev, isOpen: false }))
   }
 
+  // Load products on component mount
+  useEffect(() => {
+    fetchProducts()
+  }, [])
+
+  // Apply real-time inventory updates to products
+  useEffect(() => {
+    if (inventoryUpdates.length > 0) {
+      setProducts(prevProducts => 
+        prevProducts.map(product => {
+          const update = inventoryUpdates.find(u => u.productId === product._id)
+          if (update) {
+            return {
+              ...product,
+              quantity: update.quantity ?? product.quantity
+            }
+          }
+          return product
+        })
+      )
+    }
+  }, [inventoryUpdates])
+
+  // Handle product deletions - remove from products and cart
+  useEffect(() => {
+    if (deletedProducts.length > 0) {
+      setProducts(prevProducts => 
+        prevProducts.filter(product => !deletedProducts.includes(product._id))
+      )
+      
+      // Remove deleted products from cart
+      setCart(prevCart => 
+        prevCart.filter(item => !deletedProducts.includes(item.product._id))
+      )
+    }
+  }, [deletedProducts])
+
   const openImageModal = (imageUrl: string, productName: string) => {
     setImageModal({
       isOpen: true,
@@ -185,7 +284,7 @@ export default function SalesPage() {
     }
   }
 
-  const addToCart = async (product: Product) => {
+  const addToCart = async (product: Product, quantity: number = 1) => {
     // Prevent multiple rapid additions
     if (addingToCart === product._id) return
     
@@ -196,9 +295,9 @@ export default function SalesPage() {
       const currentCartQuantity = existingItem ? existingItem.quantity : 0
       const availableStock = product.availableQuantity || product.quantity || 0
       
-      // Check if we can add one more item
-      if (currentCartQuantity >= availableStock) {
-        error(`Cannot add more ${product.name}. Available stock: ${availableStock}`)
+      // Check if we can add the requested quantity
+      if (currentCartQuantity + quantity > availableStock) {
+        error(`Cannot add ${quantity} items of ${product.name}. Available stock: ${availableStock - currentCartQuantity}`)
         return
       }
       
@@ -211,7 +310,7 @@ export default function SalesPage() {
           },
           body: JSON.stringify({
             productId: product._id,
-            quantity: 1,
+            quantity: quantity,
             action: 'reserve'
           })
         })
@@ -230,23 +329,32 @@ export default function SalesPage() {
       if (existingItem) {
         setCart(cart.map(item =>
           item.product._id === product._id
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: item.quantity + quantity }
             : item
         ))
-        success(`Added ${product.name} to cart (${existingItem.quantity + 1})`)
+        success(`Added ${quantity} x ${product.name} to cart (Total: ${existingItem.quantity + quantity})`)
       } else {
-        setCart([...cart, { product, quantity: 1 }])
-        success(`${product.name} added to cart!`)
+        setCart([...cart, { product, quantity: quantity }])
+        success(`${quantity} x ${product.name} added to cart!`)
       }
       
       // Update product in local state to reflect reduced available quantity
       setProducts(prevProducts => 
         prevProducts.map(p => 
           p._id === product._id 
-            ? { ...p, availableQuantity: (p.availableQuantity || p.quantity) - 1 }
+            ? { ...p, availableQuantity: (p.availableQuantity || p.quantity) - quantity }
             : p
         )
       )
+      
+      // Reset selected quantity for this product
+      setSelectedQuantities(prev => ({
+        ...prev,
+        [product._id]: 1
+      }))
+      
+      // Broadcast cart update to other clients via WebSocket
+      broadcastCartUpdate(product._id, 'reserve', quantity)
       
     } catch (err) {
       error('Failed to add item to cart. Please try again.')
@@ -307,6 +415,8 @@ export default function SalesPage() {
       `Are you sure you want to remove all ${cart.length} item(s) from your cart? This action cannot be undone.`,
       () => {
         setCart([])
+        // Clear any pending cleanup when manually clearing cart
+        localStorage.removeItem('pendingAdminCartCleanup')
         info('Cart cleared')
         closeConfirmation()
       },
@@ -343,6 +453,17 @@ export default function SalesPage() {
     if (!selectedCashier.trim()) {
       error('Please select a cashier for this sale')
       return
+    }
+
+    if (saleData.paymentStatus === 'partial') {
+      if (saleData.amountPaid <= 0) {
+        error('Amount paid must be greater than 0 for partial payments')
+        return
+      }
+      if (saleData.amountPaid >= total) {
+        error('Amount paid cannot be greater than or equal to total. Use "Pay Full" instead.')
+        return
+      }
     }
 
     // Show confirmation before proceeding
@@ -404,6 +525,9 @@ export default function SalesPage() {
         
         success(message)
         setCart([])
+        
+        // Clear any pending cleanup since sale was successfully processed
+        localStorage.removeItem('pendingAdminCartCleanup')
         setSaleData({
           tax: 0,
           discount: 0,
@@ -496,6 +620,20 @@ export default function SalesPage() {
             {/* Cart Content */}
             {!cartCollapsed && (
               <div className="border-t border-gray-200 dark:border-slate-600 p-4">
+                {/* Customer Name Field */}
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    Customer Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter customer name (optional)"
+                    value={saleData.customerName}
+                    onChange={(e) => setSaleData({ ...saleData, customerName: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
                 {cart.length === 0 ? (
                   <p className="text-gray-500 dark:text-slate-400 text-center py-4">Cart is empty</p>
                 ) : (
@@ -570,6 +708,44 @@ export default function SalesPage() {
                         </div>
                       </div>
 
+                      {/* Amount Paid (for partial payments) */}
+                      {saleData.paymentStatus === 'partial' && (
+                        <div>
+                          <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">
+                            Amount Paid *
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max={total}
+                            step="0.01"
+                            value={saleData.amountPaid}
+                            onChange={(e) => setSaleData({ ...saleData, amountPaid: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                            placeholder="Enter amount received"
+                            required
+                          />
+                          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                            Remaining: ₱{Math.max(0, total - saleData.amountPaid).toFixed(2)}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Due Date (for partial and pending payments) */}
+                      {(saleData.paymentStatus === 'partial' || saleData.paymentStatus === 'pending') && (
+                        <div>
+                          <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">
+                            Due Date
+                          </label>
+                          <input
+                            type="date"
+                            value={saleData.dueDate}
+                            onChange={(e) => setSaleData({ ...saleData, dueDate: e.target.value })}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                          />
+                        </div>
+                      )}
+
                       {/* Cashier Selection */}
                       <div>
                         <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">
@@ -590,18 +766,11 @@ export default function SalesPage() {
                         </select>
                       </div>
 
-                      {saleData.paymentStatus !== 'paid' && (
-                        <div>
-                          <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">
-                            Customer Name *
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="Customer name (required for credit)"
-                            value={saleData.customerName}
-                            onChange={(e) => setSaleData({ ...saleData, customerName: e.target.value })}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
-                          />
+                      {saleData.paymentStatus !== 'paid' && !saleData.customerName.trim() && (
+                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded p-3">
+                          <p className="text-xs text-yellow-800 dark:text-yellow-300">
+                            ⚠️ Customer name is required for credit sales. Please enter it in the cart section above.
+                          </p>
                         </div>
                       )}
 
@@ -620,13 +789,29 @@ export default function SalesPage() {
 
         {/* Search */}
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-4">
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <div className="flex gap-3 items-center">
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {/* WebSocket Connection Status */}
+            <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 dark:bg-slate-700 rounded-lg">
+              <div 
+                className={`w-2 h-2 rounded-full ${
+                  isWebSocketConnected ? 'bg-green-500' : 'bg-red-500'
+                }`}
+                title={isWebSocketConnected ? 'Connected to real-time updates' : 'Disconnected from real-time updates'}
+              />
+              <span className={`text-sm ${
+                isWebSocketConnected ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+              }`}>
+                {isWebSocketConnected ? 'Live' : 'Offline'}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Products Grid */}
@@ -657,32 +842,92 @@ export default function SalesPage() {
                     />
                   </div>
 
-                  {/* Product Info */}
+                  {/* Product Info - Consistent Structure */}
                   <div className="space-y-3">
                     <div>
                       <h3 className="font-medium text-gray-900 dark:text-slate-100 text-lg">{product.name}</h3>
-                      <p className="text-sm text-gray-600 dark:text-slate-400">{product.category}</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-400 min-h-[1.25rem]">
+                        {product.description || product.category || ''}
+                      </p>
                     </div>
                     
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-semibold text-gray-900 dark:text-slate-100 text-lg">₱{product.price.toFixed(2)}</span>
-                        <p className="text-sm text-gray-600 dark:text-slate-400">Available: {product.availableQuantity || product.quantity}</p>
-                      </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-semibold text-blue-600 dark:text-blue-400">₱{product.price.toFixed(2)}</span>
+                      <span className="text-sm text-gray-600 dark:text-slate-400">Available: {product.quantity}</span>
+                    </div>
+                      
+                    {/* Quantity Selector and Add to Cart */}
+                    <div className="space-y-2">
+                      {product.quantity > 0 && (
+                        <div className="flex items-center space-x-2 mb-2">
+                          <label className="text-sm font-medium text-gray-700 dark:text-slate-300">
+                            Qty:
+                          </label>
+                          <div className="flex items-center border border-gray-300 dark:border-slate-600 rounded-md">
+                            <button
+                              onClick={() => {
+                                const currentQty = selectedQuantities[product._id] || 1
+                                if (currentQty > 1) {
+                                  setSelectedQuantities(prev => ({
+                                    ...prev,
+                                    [product._id]: currentQty - 1
+                                  }))
+                                }
+                              }}
+                              className="px-2 py-1 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              max={product.availableQuantity || product.quantity}
+                              value={selectedQuantities[product._id] || 1}
+                              onChange={(e) => {
+                                const value = Math.max(1, Math.min(
+                                  parseInt(e.target.value) || 1,
+                                  product.availableQuantity || product.quantity
+                                ))
+                                setSelectedQuantities(prev => ({
+                                  ...prev,
+                                  [product._id]: value
+                                }))
+                              }}
+                              className="w-16 px-2 py-1 text-center border-0 bg-transparent text-gray-900 dark:text-slate-100 focus:outline-none"
+                            />
+                            <button
+                              onClick={() => {
+                                const currentQty = selectedQuantities[product._id] || 1
+                                const maxQty = product.quantity
+                                if (currentQty < maxQty) {
+                                  setSelectedQuantities(prev => ({
+                                    ...prev,
+                                    [product._id]: currentQty + 1
+                                  }))
+                                }
+                              }}
+                              className="px-2 py-1 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
                       <button
-                        onClick={() => addToCart(product)}
-                        disabled={(product.availableQuantity || product.quantity) === 0 || addingToCart === product._id}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors relative"
+                        onClick={() => addToCart(product, selectedQuantities[product._id] || 1)}
+                        disabled={product.quantity === 0 || addingToCart === product._id}
+                        className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors relative"
                       >
                         {addingToCart === product._id ? (
                           <div className="flex items-center justify-center">
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                             Adding...
                           </div>
-                        ) : (product.availableQuantity || product.quantity) === 0 ? (
+                        ) : product.quantity === 0 ? (
                           'Out of Stock'
                         ) : (
-                          'Add to Cart'
+                          `Add ${selectedQuantities[product._id] || 1} to Cart`
                         )}
                       </button>
                     </div>

@@ -22,14 +22,20 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20')
     const search = searchParams.get('search')
     const category = searchParams.get('category')
+    const preorderOnly = searchParams.get('preorderOnly') === 'true'
     
     const query: any = {}
     
     // Filter by store - only show products from the customer's store
     query.storeId = customerAuth.store._id
     
-    // Only show products with quantity > 0
-    query.quantity = { $gt: 0 }
+    // Filter by preorder availability
+    if (preorderOnly) {
+      query.availableForPreorder = true
+    } else {
+      // Only show products with quantity > 0 for regular shop
+      query.quantity = { $gt: 0 }
+    }
     
     // Search functionality
     if (search) {
@@ -45,12 +51,17 @@ export async function GET(request: NextRequest) {
     }
     
     const products = await Product.find(query)
-      .select('name price quantity totalQuantity availableQuantity reservedQuantity description category seller imageUrl')
+      .select('name price quantity availableForPreorder description category seller imageUrl')
       .limit(limit)
       .skip((page - 1) * limit)
       .sort({ name: 1 })
     
     const total = await Product.countDocuments(query)
+    
+    // For preorderOnly requests, return products directly for compatibility
+    if (preorderOnly) {
+      return NextResponse.json(products)
+    }
     
     return NextResponse.json({
       products,

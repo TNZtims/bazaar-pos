@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10')
     const search = searchParams.get('search')
     const category = searchParams.get('category')
+    const preorderOnly = searchParams.get('preorderOnly') === 'true'
     
     const query: any = {}
     
@@ -39,6 +40,11 @@ export async function GET(request: NextRequest) {
     // Category filter
     if (category) {
       query.category = category
+    }
+
+    // Preorder only filter
+    if (preorderOnly) {
+      query.availableForPreorder = true
     }
     
     const products = await Product.find(query)
@@ -77,13 +83,10 @@ export async function POST(request: NextRequest) {
     await connectToDatabase()
     
     const body = await request.json()
-    const { name, price, cost, quantity, totalQuantity, description, category, sku, seller, imageUrl } = body
-    
-    // Use totalQuantity if provided, otherwise fall back to quantity for backward compatibility
-    const finalQuantity = totalQuantity !== undefined ? totalQuantity : quantity
+    const { name, price, cost, quantity, description, category, sku, seller, imageUrl, availableForPreorder } = body
     
     // Validation
-    if (!name || !price || finalQuantity === undefined) {
+    if (!name || !price || quantity === undefined) {
       return NextResponse.json(
         { message: 'Name, price, and quantity are required' },
         { status: 400 }
@@ -94,8 +97,8 @@ export async function POST(request: NextRequest) {
       name,
       price,
       cost,
-      totalQuantity: finalQuantity,
-      reservedQuantity: 0, // Default to 0 for new products
+      quantity: quantity || 0,
+      availableForPreorder: availableForPreorder || false,
       description,
       category,
       sku,
@@ -105,6 +108,15 @@ export async function POST(request: NextRequest) {
     })
     
     const savedProduct = await product.save()
+    
+    // Broadcast inventory update via WebSocket
+    if ((global as any).io) {
+      (global as any).io.to(`store-${authContext.store._id}`).emit('inventory-changed', {
+        productId: (savedProduct._id as any).toString(),
+        quantity: savedProduct.quantity,
+        timestamp: new Date().toISOString()
+      })
+    }
     
     return NextResponse.json(savedProduct, { status: 201 })
   } catch (error: any) {

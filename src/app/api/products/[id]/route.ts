@@ -56,10 +56,7 @@ export async function PUT(
     await connectToDatabase()
     
     const body = await request.json()
-    const { name, price, quantity, totalQuantity, description, category, sku, cost, seller, imageUrl } = body
-    
-    // Use totalQuantity if provided, otherwise fall back to quantity for backward compatibility
-    const finalQuantity = totalQuantity !== undefined ? totalQuantity : quantity
+    const { name, price, quantity, description, category, sku, cost, seller, imageUrl, availableForPreorder } = body
     
     const { id } = await params
     const product = await Product.findByIdAndUpdate(
@@ -67,13 +64,14 @@ export async function PUT(
       { 
         name, 
         price, 
-        totalQuantity: finalQuantity, 
+        quantity, 
         description, 
         category, 
         sku, 
         cost, 
         seller,
-        imageUrl 
+        imageUrl,
+        availableForPreorder: availableForPreorder !== undefined ? availableForPreorder : false
       },
       { new: true, runValidators: true }
     )
@@ -83,6 +81,15 @@ export async function PUT(
         { message: 'Product not found' },
         { status: 404 }
       )
+    }
+    
+    // Broadcast inventory update via WebSocket
+    if ((global as any).io) {
+      (global as any).io.to(`store-${product.storeId}`).emit('inventory-changed', {
+        productId: (product._id as any).toString(),
+        quantity: product.quantity,
+        timestamp: new Date().toISOString()
+      })
     }
     
     return NextResponse.json(product)
@@ -116,6 +123,14 @@ export async function DELETE(
         { message: 'Product not found' },
         { status: 404 }
       )
+    }
+    
+    // Broadcast product deletion via WebSocket
+    if ((global as any).io) {
+      (global as any).io.to(`store-${product.storeId}`).emit('product-deleted', {
+        productId: (product._id as any).toString(),
+        timestamp: new Date().toISOString()
+      })
     }
     
     return NextResponse.json({ message: 'Product deleted successfully' })

@@ -82,7 +82,7 @@ export async function PUT(
     
     const { id } = await params
     const body = await request.json()
-    const { storeName, password, isAdmin, cashiers } = body
+    const { storeName, password, isAdmin, cashiers, isOnline, storeHours } = body
     
     if (!storeName) {
       return NextResponse.json(
@@ -105,6 +105,15 @@ export async function PUT(
       storeName,
       isAdmin: Boolean(isAdmin),
       cashiers: Array.isArray(cashiers) ? cashiers : []
+    }
+
+    // Add optional fields if provided
+    if (isOnline !== undefined) {
+      updateData.isOnline = Boolean(isOnline)
+    }
+
+    if (storeHours && typeof storeHours === 'object') {
+      updateData.storeHours = storeHours
     }
     
     // Handle password update if provided
@@ -138,7 +147,7 @@ export async function PUT(
       id,
       updateData,
       { new: true, runValidators: true }
-    ).select('storeName isActive isAdmin cashiers createdAt updatedAt')
+    ).select('storeName isActive isAdmin cashiers isOnline storeHours createdAt updatedAt')
     
     return NextResponse.json({
       message: 'Store updated successfully',
