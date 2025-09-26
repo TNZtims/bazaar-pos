@@ -76,8 +76,7 @@ export default function ProductsPage() {
     category: '',
     sku: '',
     seller: '',
-    imageUrl: '',
-    availableForPreorder: false
+    imageUrl: ''
   })
 
   useEffect(() => {
@@ -154,7 +153,7 @@ export default function ProductsPage() {
         
         setShowModal(false)
         setEditingProduct(null)
-        setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '', availableForPreorder: false })
+        setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '' })
         
         // Refresh products list
         await fetchProducts()
@@ -182,8 +181,7 @@ export default function ProductsPage() {
       category: product.category || '',
       sku: product.sku || '',
       seller: product.seller || '',
-      imageUrl: product.imageUrl || '',
-      availableForPreorder: product.availableForPreorder || false
+      imageUrl: product.imageUrl || ''
     })
     setShowModal(true)
   }
@@ -298,7 +296,7 @@ export default function ProductsPage() {
 
   const openAddModal = () => {
     setEditingProduct(null)
-    setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '', availableForPreorder: false })
+    setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '' })
     setShowModal(true)
   }
 
@@ -386,9 +384,6 @@ export default function ProductsPage() {
                     <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Seller
                     </th>
-                    <th className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                      Preorder
-                    </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Actions
                     </th>
@@ -458,15 +453,6 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                         {product.seller || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          product.availableForPreorder 
-                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400' 
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-400'
-                        }`}>
-                          {product.availableForPreorder ? 'Yes' : 'No'}
-                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                         <button
@@ -546,16 +532,6 @@ export default function ProductsPage() {
                       <div className="col-span-2">
                         <span className="text-gray-500 dark:text-slate-400">Seller:</span>
                         <span className="ml-1 font-medium text-gray-900 dark:text-slate-100">{product.seller || '-'}</span>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-gray-500 dark:text-slate-400">Preorder:</span>
-                        <span className={`ml-1 px-2 py-1 text-xs font-semibold rounded-full ${
-                          product.availableForPreorder 
-                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400' 
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-400'
-                        }`}>
-                          {product.availableForPreorder ? 'Available' : 'Not Available'}
-                        </span>
                       </div>
                     </div>
 
@@ -681,19 +657,6 @@ export default function ProductsPage() {
                 </div>
               </div>
               
-              {/* Preorder Availability */}
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="availableForPreorder"
-                  checked={formData.availableForPreorder}
-                  onChange={(e) => setFormData({ ...formData, availableForPreorder: e.target.checked })}
-                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                />
-                <label htmlFor="availableForPreorder" className="text-sm font-medium text-gray-700 dark:text-slate-300">
-                  Available for Preorder
-                </label>
-              </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">

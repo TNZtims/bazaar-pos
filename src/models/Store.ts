@@ -8,6 +8,9 @@ export interface IStore extends Document {
   isAdmin: boolean
   cashiers: string[]
   isOnline: boolean
+  isLocked: boolean
+  bannerImageUrl?: string
+  logoImageUrl?: string
   createdAt: Date
   updatedAt: Date
   
@@ -44,6 +47,10 @@ const storeSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isLocked: {
+    type: Boolean,
+    default: false
+  },
   storeHours: {
     type: {
       monday: { open: String, close: String, closed: { type: Boolean, default: false } },
@@ -63,6 +70,16 @@ const storeSchema = new mongoose.Schema({
       saturday: { open: '09:00', close: '18:00', closed: false },
       sunday: { open: '10:00', close: '16:00', closed: false }
     }
+  },
+  bannerImageUrl: {
+    type: String,
+    trim: true,
+    default: null
+  },
+  logoImageUrl: {
+    type: String,
+    trim: true,
+    default: null
   }
 }, {
   timestamps: true

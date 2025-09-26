@@ -17,10 +17,18 @@ interface UseWebSocketInventoryOptions {
   enabled?: boolean
 }
 
+interface CartUpdate {
+  productId: string
+  action: 'reserve' | 'release'
+  quantity: number
+  timestamp: string
+}
+
 interface UseWebSocketInventoryReturn {
   socket: Socket | null
   updates: InventoryUpdate[]
   deletedProducts: string[]
+  cartUpdates: CartUpdate[]
   isConnected: boolean
   error: string | null
   broadcastInventoryUpdate: (productId: string, updates: Partial<InventoryUpdate>) => void
@@ -34,6 +42,7 @@ export function useWebSocketInventory({
   const [socket, setSocket] = useState<Socket | null>(null)
   const [updates, setUpdates] = useState<InventoryUpdate[]>([])
   const [deletedProducts, setDeletedProducts] = useState<string[]>([])
+  const [cartUpdates, setCartUpdates] = useState<CartUpdate[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -86,17 +95,38 @@ export function useWebSocketInventory({
     })
 
     // Listen for cart changes (from other users)
-    newSocket.on('cart-changed', (data: { productId: string, action: string, quantity: number }) => {
+    newSocket.on('cart-changed', (data: { productId: string, action: string, quantity: number, timestamp?: string }) => {
       console.log('Received cart update:', data)
       
-      // Create inventory update based on cart action
-      const inventoryUpdate: InventoryUpdate = {
+      const cartUpdate: CartUpdate = {
         productId: data.productId,
-        timestamp: new Date().toISOString()
+        action: data.action as 'reserve' | 'release',
+        quantity: data.quantity,
+        timestamp: data.timestamp || new Date().toISOString()
       }
       
-      // You might want to fetch the actual quantities from server here
-      // For now, we'll let the periodic sync handle this
+      setCartUpdates(prevUpdates => {
+        // Keep only the latest update per product
+        const filtered = prevUpdates.filter(update => update.productId !== data.productId)
+        return [...filtered, cartUpdate]
+      })
+      
+      // Also trigger inventory update for real-time availability calculation
+      const inventoryUpdate: InventoryUpdate = {
+        productId: data.productId,
+        timestamp: cartUpdate.timestamp
+      }
+      
+      setUpdates(prevUpdates => {
+        const existingIndex = prevUpdates.findIndex(update => update.productId === data.productId)
+        if (existingIndex >= 0) {
+          const newUpdates = [...prevUpdates]
+          newUpdates[existingIndex] = { ...newUpdates[existingIndex], ...inventoryUpdate }
+          return newUpdates
+        } else {
+          return [...prevUpdates, inventoryUpdate]
+        }
+      })
     })
 
     // Listen for product deletion
@@ -152,6 +182,7 @@ export function useWebSocketInventory({
     socket,
     updates,
     deletedProducts,
+    cartUpdates,
     isConnected,
     error,
     broadcastInventoryUpdate,

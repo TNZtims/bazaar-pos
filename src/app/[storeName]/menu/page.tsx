@@ -51,6 +51,14 @@ export default function MenuPage() {
         const storeResponse = await fetch(`/api/stores/resolve/${encodeURIComponent(storeName)}`)
         if (storeResponse.ok) {
           const storeData = await storeResponse.json()
+          
+          // Check if store is accessible
+          if (!storeData.accessible) {
+            // Store is closed - redirect to closed page
+            router.push(`/${storeName}/closed`)
+            return
+          }
+          
           setStore({ id: storeData.id, name: storeData.name })
           
           // Fetch all products for the menu
@@ -73,7 +81,65 @@ export default function MenuPage() {
     }
 
     fetchStoreAndProducts()
-  }, [storeName])
+  }, [storeName, router])
+
+  // Real-time store status monitoring
+  useEffect(() => {
+    const checkStoreStatus = async () => {
+      try {
+        const response = await fetch(`/api/stores/resolve/${encodeURIComponent(storeName)}`, {
+          // Prevent fetch from logging errors to console
+          cache: 'no-cache'
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          if (!data.accessible) {
+            console.log(`🏪 Store "${storeName}" has been closed - redirecting users`)
+            // Store was just closed - redirect to closed page
+            router.push(`/${storeName}/closed`)
+          } else {
+            // Store is still open - continue normally
+            console.log(`✅ Store "${storeName}" is still open`)
+          }
+        } else {
+          console.log(`⚠️ Store "${storeName}" status check returned: ${response.status}`)
+        }
+      } catch (error) {
+        console.log(`⚠️ Unable to check store "${storeName}" status - network error`)
+      }
+    }
+
+    // Start monitoring after initial load is complete and we have a store
+    if (!loading && store && !error) {
+      // Check immediately (silently for first check)
+      const silentCheck = async () => {
+        try {
+          const response = await fetch(`/api/stores/resolve/${encodeURIComponent(storeName)}`, {
+            cache: 'no-cache'
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            if (!data.accessible) {
+              console.log(`🏪 Store "${storeName}" is closed - redirecting users`)
+              router.push(`/${storeName}/closed`)
+            }
+          }
+        } catch (error) {
+          // Silent fail for initial check
+        }
+      }
+      
+      silentCheck()
+      
+      // Set up interval to check every 10 seconds with logging
+      const interval = setInterval(checkStoreStatus, 10000)
+      
+      // Cleanup interval on unmount
+      return () => clearInterval(interval)
+    }
+  }, [loading, store, error, storeName, router])
 
   if (loading) {
     return (

@@ -18,12 +18,18 @@ export async function GET(request: NextRequest) {
     await connectToDatabase()
     
     const stores = await Store.find({})
-      .select('storeName isActive isAdmin cashiers isOnline storeHours createdAt updatedAt')
+      .select('storeName isActive isAdmin cashiers isOnline isLocked storeHours bannerImageUrl logoImageUrl createdAt updatedAt')
       .sort({ createdAt: -1 })
     
+    // Ensure isLocked field exists for all stores (set to false if undefined)
+    const normalizedStores = stores.map(store => ({
+      ...store.toObject(),
+      isLocked: store.isLocked || false
+    }))
+    
     return NextResponse.json({
-      stores,
-      total: stores.length
+      stores: normalizedStores,
+      total: normalizedStores.length
     })
   } catch (error: any) {
     console.error('Error fetching stores:', error)

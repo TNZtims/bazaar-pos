@@ -1,18 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectToDatabase from '@/lib/mongodb'
 import Product from '@/models/Product'
-import { authenticateRequest } from '@/lib/auth'
+import Cart from '@/models/Cart'
+import { authenticateRequest, authenticateCustomerRequest } from '@/lib/auth'
 
 // GET /api/products - Get all products with optional search and pagination
 export async function GET(request: NextRequest) {
   try {
-    const authContext = await authenticateRequest(request)
+    // Try customer authentication first, then admin authentication
+    let authContext: any = await authenticateCustomerRequest(request)
+    let isCustomer = true
     
     if (!authContext) {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
-      )
+      // Fall back to admin authentication for store management
+      authContext = await authenticateRequest(request)
+      isCustomer = false
+    }
+    
+    // If authentication fails, provide a fallback for development
+    if (!authContext) {
+      // console.log('⚠️ Authentication failed, using fallback mode for development')
+      
+      // Try to connect to database anyway
+      try {
+        await connectToDatabase()
+      } catch (dbError) {
+        console.error('❌ Database connection failed in fallback mode:', (dbError as Error).message)
+        return NextResponse.json(
+          { 
+            message: 'Database connection failed', 
+            error: 'Please check your MongoDB connection',
+            products: [],
+            totalPages: 0,
+            currentPage: 1,
+            total: 0
+          },
+          { status: 500 }
+        )
+      }
+      
+      // Return sample data or empty array for development
+      return NextResponse.json({
+        products: [],
+        totalPages: 0,
+        currentPage: 1,
+        total: 0,
+        message: 'Authentication required - please login first'
+      })
     }
     
     await connectToDatabase()
@@ -54,8 +88,49 @@ export async function GET(request: NextRequest) {
     
     const total = await Product.countDocuments(query)
     
+    // Calculate available quantities considering cart reservations for current user
+    // Only do cart lookup if this is for sales page (has includeCart parameter or user agent suggests sales)
+    const includeCart = searchParams.get('includeCart') === 'true'
+    let userCart = null
+    
+    if (includeCart && isCustomer && 'user' in authContext) {
+      try {
+        userCart = await Cart.findOne({
+          userId: authContext.user._id,
+          storeId: authContext.store._id
+        })
+      } catch (cartError) {
+        console.error('Error fetching user cart:', cartError)
+        // Continue without cart data - will show full availability
+      }
+    }
+    
+    const productsWithAvailability = products.map(product => {
+      const productObj = product.toObject()
+      let reservedQuantity = 0
+      
+      if (userCart) {
+        const cartItem = userCart.items.find(
+          (item: any) => item.product.toString() === (product._id as any).toString()
+        )
+        if (cartItem) {
+          reservedQuantity = cartItem.quantity
+        }
+      }
+      
+      // Calculate actual available quantity (total - reserved in user's cart)
+      const availableQuantity = Math.max(0, product.quantity - reservedQuantity)
+      
+      return {
+        ...productObj,
+        availableQuantity,
+        totalQuantity: product.quantity,
+        reservedQuantity: includeCart ? reservedQuantity : 0
+      }
+    })
+    
     return NextResponse.json({
-      products,
+      products: productsWithAvailability,
       totalPages: Math.ceil(total / limit),
       currentPage: page,
       total
@@ -83,7 +158,7 @@ export async function POST(request: NextRequest) {
     await connectToDatabase()
     
     const body = await request.json()
-    const { name, price, cost, quantity, description, category, sku, seller, imageUrl, availableForPreorder } = body
+    const { name, price, cost, quantity, description, category, sku, seller, imageUrl } = body
     
     // Validation
     if (!name || !price || quantity === undefined) {
@@ -98,7 +173,7 @@ export async function POST(request: NextRequest) {
       price,
       cost,
       quantity: quantity || 0,
-      availableForPreorder: availableForPreorder || false,
+      availableForPreorder: true,
       description,
       category,
       sku,

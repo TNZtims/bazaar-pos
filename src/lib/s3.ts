@@ -10,7 +10,10 @@ const S3_SECRET_KEY = process.env.AWS_SECRET_ACCESS_KEY || ''
 
 // Validate required environment variables
 if (!S3_BUCKET || !S3_ACCESS_KEY || !S3_SECRET_KEY) {
-  console.warn('⚠️ S3 configuration incomplete. Image upload will be disabled.')
+  // Only show warning in development mode and on server-side
+  if (process.env.NODE_ENV === 'development' && typeof window === 'undefined') {
+    console.warn('⚠️ S3 configuration incomplete. Image upload will be disabled.')
+  }
 }
 
 // Initialize S3 client with security best practices

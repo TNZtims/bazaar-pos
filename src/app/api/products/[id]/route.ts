@@ -56,7 +56,7 @@ export async function PUT(
     await connectToDatabase()
     
     const body = await request.json()
-    const { name, price, quantity, description, category, sku, cost, seller, imageUrl, availableForPreorder } = body
+    const { name, price, quantity, description, category, sku, cost, seller, imageUrl } = body
     
     const { id } = await params
     const product = await Product.findByIdAndUpdate(
@@ -71,7 +71,7 @@ export async function PUT(
         cost, 
         seller,
         imageUrl,
-        availableForPreorder: availableForPreorder !== undefined ? availableForPreorder : false
+        availableForPreorder: true
       },
       { new: true, runValidators: true }
     )

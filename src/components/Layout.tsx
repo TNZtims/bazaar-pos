@@ -89,7 +89,6 @@ const Layout = ({ children }: LayoutProps) => {
     { name: 'Products', href: '/products', icon: '📦', gradient: 'from-green-500 to-teal-600' },
     { name: 'Sales', href: '/sales', icon: '💰', gradient: 'from-yellow-500 to-orange-600' },
     { name: 'Orders', href: '/orders', icon: '📋', gradient: 'from-purple-500 to-indigo-600' },
-    { name: 'Preorders', href: '/preorders', icon: '📋', gradient: 'from-orange-500 to-red-600' },
     { name: 'Users', href: '/users', icon: '👥', gradient: 'from-cyan-500 to-blue-600' },
     { name: 'Cashiers', href: '/cashiers', icon: '💼', gradient: 'from-emerald-500 to-teal-600' },
     ...(store?.isAdmin ? [

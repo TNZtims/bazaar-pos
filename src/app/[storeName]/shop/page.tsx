@@ -38,45 +38,70 @@ interface Store {
   id: string
   name: string
   status?: StoreStatus
+  bannerImageUrl?: string
+  logoImageUrl?: string
 }
 
 export default function PublicShopPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [cart, setCart] = useState<CartItem[]>([]) // Regular shopping cart
   const [preorderCart, setPreorderCart] = useState<CartItem[]>([]) // Preorder cart
+  const [orders, setOrders] = useState<any[]>([]) // User's orders
+  const [confirmedReservations, setConfirmedReservations] = useState<any[]>([]) // Confirmed reservations
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
   const [store, setStore] = useState<Store | null>(null)
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
-  const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [placingOrder, setPlacingOrder] = useState(false)
   const [editingOrder, setEditingOrder] = useState<string | null>(null)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [addingToCart, setAddingToCart] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState('')
   const [selectedQuantities, setSelectedQuantities] = useState<{[productId: string]: number}>({})
   const [activeTab, setActiveTab] = useState<'shop' | 'preorder'>('shop')
+  const [activeCartTab, setActiveCartTab] = useState<'cart' | 'confirmed'>('cart')
   const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
   const [storeId, setStoreId] = useState<string | null>(null)
   const [userHasInteracted, setUserHasInteracted] = useState(false)
+  const [storeClosed, setStoreClosed] = useState(false)
   
   // Real-time inventory updates via WebSocket
   const { 
     updates: inventoryUpdates, 
     deletedProducts,
+    cartUpdates,
     isConnected: isWebSocketConnected,
     error: webSocketError,
     broadcastCartUpdate
   } = useWebSocketInventory({
-    storeId,
-    enabled: !loading && !!storeId
+    storeId: storeId || null,
+    enabled: !!storeId
   })
   
   const params = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
   const storeName = params.storeName as string
+
+  // Apply real-time inventory updates to products
+  useEffect(() => {
+    if (inventoryUpdates.length > 0) {
+      setProducts(prevProducts => 
+        prevProducts.map(product => {
+          const update = inventoryUpdates.find(u => u.productId === product._id)
+          if (update) {
+            return {
+              ...product,
+              quantity: update.quantity ?? product.quantity
+            }
+          }
+          return product
+        })
+      )
+    }
+  }, [inventoryUpdates])
 
   // Check for order editing mode
   useEffect(() => {
@@ -90,18 +115,41 @@ export default function PublicShopPage() {
   // Fetch store information and status using store name
   const fetchStoreInfo = async () => {
     try {
-      const response = await fetch(`/api/stores/resolve/${encodeURIComponent(storeName)}`)
+      const response = await fetch(`/api/stores/resolve/${encodeURIComponent(storeName)}`, {
+        cache: 'no-cache'
+      })
       if (response.ok) {
         const data = await response.json()
-        setStore({ id: data.id, name: data.name, status: data.status })
+        
+        // Check if store is accessible
+        if (!data.accessible) {
+          // Store is closed - redirect to closed page
+          router.push(`/${storeName}/closed`)
+          return
+        }
+        
+        // Store is open and accessible
+        const storeData = { 
+          id: data.id, 
+          name: data.name, 
+          status: data.status,
+          bannerImageUrl: data.bannerImageUrl,
+          logoImageUrl: data.logoImageUrl
+        }
+        setStore(storeData)
         setStoreStatus(data.status)
         setStoreId(data.id) // Set the resolved store ID for other API calls
+        setStoreClosed(false) // Store is open
       } else {
         setError('Store not found')
+        setStoreClosed(true)
+        setLoading(false)
       }
     } catch (err) {
       console.error('Error fetching store info:', err)
       setError('Failed to load store information')
+      setStoreClosed(true) // Treat as closed
+      setLoading(false)
     }
   }
 
@@ -120,7 +168,25 @@ export default function PublicShopPage() {
         
         const data = await response.json()
         setUser(data.user)
-        setStore(data.store)
+        // Preserve existing store data (especially image URLs) when updating from auth check
+        setStore(prevStore => {
+          if (!prevStore) {
+            // If no previous store data, just set the basic data from auth
+            return {
+              id: data.store.id,
+              name: data.store.name,
+              status: undefined,
+              bannerImageUrl: undefined,
+              logoImageUrl: undefined
+            }
+          }
+          // Preserve existing store data and only update basic fields from auth
+          return {
+            ...prevStore,
+            id: data.store.id,
+            name: data.store.name
+          }
+        })
         
         // Verify store matches URL (only if storeId is available)
         if (storeId && data.store.id !== storeId) {
@@ -143,7 +209,6 @@ export default function PublicShopPage() {
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (cart.length > 0 && userHasInteracted) {
-        console.log('🚨 Attempting to leave page with cart items:', cart.length, '(user has interacted:', userHasInteracted, ')')
         
         // The message to show - keep it simple for better browser compatibility
         const message = 'You have items in your cart. Are you sure you want to leave?'
@@ -170,7 +235,6 @@ export default function PublicShopPage() {
             // Use sendBeacon with proper content type
             const blob = new Blob([data], { type: 'application/json' })
             const success = navigator.sendBeacon('/api/products/reserve', blob)
-            console.log(`📡 SendBeacon for ${item.product.name}:`, success ? 'sent' : 'failed')
           } catch (err) {
             console.error('Failed to release reserved stock via beacon:', err)
           }
@@ -184,7 +248,6 @@ export default function PublicShopPage() {
     // Alternative: Use pagehide event for iOS Safari
     const handlePageHide = (event: PageTransitionEvent) => {
       if (cart.length > 0) {
-        console.log('📱 Page hiding with cart items (iOS Safari):', cart.length)
         
         // Save to localStorage
         localStorage.setItem('pendingCartCleanup', JSON.stringify(cart.map(item => ({
@@ -228,7 +291,6 @@ export default function PublicShopPage() {
     // Check for pending cart cleanup on page load (CRITICAL for quantity reversion)
     const pendingCleanup = localStorage.getItem('pendingCartCleanup')
     if (pendingCleanup) {
-      console.log('🔄 Found pending cart cleanup - releasing reserved stock...')
       ;(async () => {
         try {
           const cartItems = JSON.parse(pendingCleanup)
@@ -248,7 +310,6 @@ export default function PublicShopPage() {
               })
               
               if (response.ok) {
-                console.log(`✅ Released ${item.quantity} units for product ${item.productId}`)
               } else {
                 console.error(`❌ Failed to release stock for product ${item.productId}:`, await response.text())
               }
@@ -262,7 +323,6 @@ export default function PublicShopPage() {
           
           // Clear the pending cleanup only after attempting all releases
           localStorage.removeItem('pendingCartCleanup')
-          console.log('✅ Cart cleanup completed')
         } catch (err) {
           console.error('Failed to parse pending cart cleanup:', err)
           localStorage.removeItem('pendingCartCleanup')
@@ -294,22 +354,20 @@ export default function PublicShopPage() {
               credentials: 'include'
             })
             
-            // Broadcast stock release to other clients
-            broadcastCartUpdate(item.product._id, 'release', item.quantity)
+            // No broadcast needed - cart operations don't affect availability
           } catch (err) {
             console.error('Failed to release reserved stock on unmount:', err)
           }
         })
       }
     }
-  }, [broadcastCartUpdate, cart, userHasInteracted])
+  }, [cart, userHasInteracted])
 
   // Track user interaction for beforeunload (browsers require user interaction)
   useEffect(() => {
     const enableInteraction = () => {
       if (!userHasInteracted) {
         setUserHasInteracted(true)
-        console.log('✅ User interaction detected - beforeunload enabled')
       }
     }
 
@@ -328,40 +386,113 @@ export default function PublicShopPage() {
   // Debug function to test beforeunload (for development)
   const testBeforeUnload = () => {
     if (cart.length > 0) {
-      console.log('🧪 Testing beforeunload with', cart.length, 'items')
       // Manually trigger a test
       const confirmed = window.confirm('Test: You have items in your cart. Are you sure you want to leave?')
       if (confirmed) {
-        console.log('User confirmed leaving')
       } else {
-        console.log('User cancelled leaving')
       }
     } else {
-      console.log('🧪 No items in cart to test')
     }
   }
 
-  // Fetch products
+  // Fetch store info and reset states when store name changes
   useEffect(() => {
+    // Reset states when switching stores
+    setError('')
+    setStoreClosed(false)
+    setLoading(true)
+    setProducts([])
+    
     fetchStoreInfo()
   }, [storeName])
 
+  // Real-time store status monitoring
+  useEffect(() => {
+    const checkStoreStatus = async () => {
+      try {
+        const response = await fetch(`/api/stores/resolve/${encodeURIComponent(storeName)}`, {
+          // Prevent fetch from logging errors to console
+          cache: 'no-cache'
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          if (!data.accessible) {
+            // Store was just closed - redirect to closed page
+            router.push(`/${storeName}/closed`)
+          } else {
+            // Store is still open - continue normally
+          }
+        } else {
+        }
+      } catch (error) {
+        // console.log(`⚠️ Unable to check store "${storeName}" status - network error`)
+      }
+    }
+
+    // Start monitoring after initial load is complete
+    if (!loading && !storeClosed) {
+      // Check immediately (silently for first check)
+      const silentCheck = async () => {
+        try {
+          const response = await fetch(`/api/stores/resolve/${encodeURIComponent(storeName)}`, {
+            cache: 'no-cache'
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            if (!data.accessible) {
+              // console.log(`🏪 Store "${storeName}" is closed - redirecting users`)
+              router.push(`/${storeName}/closed`)
+            }
+          }
+        } catch (error) {
+          // Silent fail for initial check
+        }
+      }
+      
+      silentCheck()
+      
+      // Set up interval to check every 10 seconds with logging
+      const interval = setInterval(checkStoreStatus, 10000)
+      
+      // Cleanup interval on unmount or when store becomes closed
+      return () => clearInterval(interval)
+    }
+  }, [loading, storeClosed, storeName, router])
+
   useEffect(() => {
     const fetchProducts = async () => {
-      if (!user || !storeId) return
+      // Don't fetch products if store is closed or we have an error
+      if (storeClosed || error) {
+        setLoading(false)
+        return
+      }
       
       try {
-        const response = await fetch('/api/products/public', {
+        // Use store name for public access if user is not authenticated
+        // Include cart data for authenticated users to get proper availability calculations
+        const apiUrl = user && storeId 
+          ? '/api/products'
+          : `/api/products/public?store=${storeName}`
+          
+        const response = await fetch(apiUrl, {
           credentials: 'include'
         })
         
         if (response.ok) {
           const data = await response.json()
-          setProducts(data.products)
+          setProducts(data.products || [])
+        } else if (response.status === 403) {
+          const errorData = await response.json()
+          setError(errorData.message || 'Store is currently closed to public access')
+          setStoreClosed(true)
         } else {
+          console.error('Failed to load products:', response.status, response.statusText)
           setError('Failed to load products')
         }
       } catch (err) {
+        console.error('Error loading products:', err)
         setError('Failed to load products')
       } finally {
         setLoading(false)
@@ -369,7 +500,64 @@ export default function PublicShopPage() {
     }
     
     fetchProducts()
-  }, [user, storeId])
+  }, [user, storeId, storeName, storeClosed])
+
+  // Refresh products function (called after order confirmation)
+  const refreshProducts = async () => {
+    if (storeClosed) return
+    
+    try {
+      const apiUrl = user && storeId 
+        ? '/api/products'
+        : `/api/products/public?store=${storeName}`
+        
+      const response = await fetch(apiUrl, {
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setProducts(data.products || [])
+        // console.log('🔄 Products refreshed after order confirmation')
+      } else {
+        console.error('Failed to refresh products:', response.status, response.statusText)
+      }
+    } catch (err) {
+      console.error('Error refreshing products:', err)
+    }
+  }
+
+  // Load cart and confirmed reservations from MongoDB when user is authenticated and products are loaded
+  useEffect(() => {
+    if (user && storeId && products.length > 0) {
+      loadCartFromDB()
+      loadConfirmedReservations()
+    }
+  }, [user, storeId, products])
+
+  // Fetch user's orders (legacy - keeping for compatibility)
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (!user) return
+      
+      try {
+        const response = await fetch('/api/orders/public', {
+          credentials: 'include'
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          setOrders(data.orders || [])
+        } else {
+          console.error('Failed to load orders:', response.status, response.statusText)
+        }
+      } catch (err) {
+        console.error('Error loading orders:', err)
+      }
+    }
+    
+    fetchOrders()
+  }, [user])
 
   // Auto-switch to preorder tab when store is offline
   useEffect(() => {
@@ -378,37 +566,7 @@ export default function PublicShopPage() {
     }
   }, [storeStatus, activeTab])
 
-  // Apply real-time inventory updates to products
-  useEffect(() => {
-    if (inventoryUpdates.length > 0) {
-      setProducts(prevProducts => 
-        prevProducts.map(product => {
-          const update = inventoryUpdates.find(u => u.productId === product._id)
-          if (update) {
-            return {
-              ...product,
-              quantity: update.quantity ?? product.quantity
-            }
-          }
-          return product
-        })
-      )
-    }
-  }, [inventoryUpdates])
-
-  // Handle product deletions - remove from products and cart
-  useEffect(() => {
-    if (deletedProducts.length > 0) {
-      setProducts(prevProducts => 
-        prevProducts.filter(product => !deletedProducts.includes(product._id))
-      )
-      
-      // Remove deleted products from cart
-      setCart(prevCart => 
-        prevCart.filter(item => !deletedProducts.includes(item.product._id))
-      )
-    }
-  }, [deletedProducts])
+  // Note: No WebSocket inventory updates - availability only changes when orders are placed
 
   const addToCart = async (product: Product, quantity: number = 1) => {
     // Prevent multiple rapid additions
@@ -428,45 +586,100 @@ export default function PublicShopPage() {
         
         // Check if we can add the requested quantity
         if (currentCartQuantity + quantity > availableStock) {
-          setError(`Cannot add ${quantity} items of ${product.name}. Available stock: ${availableStock - currentCartQuantity}`)
+          const remaining = availableStock - currentCartQuantity
+          if (remaining <= 0) {
+            setError(`Sorry! "${product.name}" is now out of stock.`)
+          } else {
+            setError(`Only ${remaining} more "${product.name}" available. You already have ${currentCartQuantity} in your cart.`)
+          }
+          setTimeout(() => setError(''), 4000)
           return
         }
         
-        // Reserve stock by calling API to temporarily reduce available quantity
-        const response = await fetch('/api/products/reserve', {
+        // No reservation API call for regular shop - just add to local cart
+        // Reservations will only happen when "Reserve Orders" is clicked
+      } else if (activeTab === 'preorder') {
+        // For preorder items, check stock availability before adding to cart
+        const existingPreorderItem = preorderCart.find(item => item.product._id === product._id)
+        const currentPreorderQuantity = existingPreorderItem ? existingPreorderItem.quantity : 0
+        const availableStock = product.quantity || 0
+        
+        // Check if we can add the requested quantity
+        if (currentPreorderQuantity + quantity > availableStock) {
+          const remaining = availableStock - currentPreorderQuantity
+          if (remaining <= 0) {
+            setError(`Sorry! "${product.name}" is now fully reserved. No more available for preorder.`)
+          } else {
+            setError(`Only ${remaining} more "${product.name}" can be preordered. You already have ${currentPreorderQuantity} in your preorder list.`)
+          }
+          setTimeout(() => setError(''), 4000)
+          return
+        }
+        
+        // console.log('Adding to preorder cart (validated stock):', quantity, 'for product:', product.name, 'Available:', availableStock, 'Current in cart:', currentPreorderQuantity)
+      }
+      
+      // Update local cart state based on active tab
+      if (activeTab === 'preorder') {
+        // Update preorder cart
+        const existingPreorderItem = preorderCart.find(item => item.product._id === product._id)
+        setPreorderCart(prevCart => {
+          const newCart = existingPreorderItem
+            ? prevCart.map(item =>
+                item.product._id === product._id
+                  ? { ...item, quantity: item.quantity + quantity }
+                  : item
+              )
+            : [...prevCart, { product, quantity: quantity }]
+          return newCart
+        })
+      } else {
+        // Update regular cart and persist to MongoDB
+      setCart(prevCart => {
+        const newCart = existingItem
+          ? prevCart.map(item =>
+              item.product._id === product._id
+                ? { ...item, quantity: item.quantity + quantity }
+                : item
+            )
+          : [...prevCart, { product, quantity: quantity }]
+
+        // Persist cart to MongoDB for authenticated users
+        if (user && storeId) {
+          const cartData = {
+            items: newCart.map(item => ({
+              product: item.product._id,
+              productName: item.product.name,
+              quantity: item.quantity,
+              unitPrice: item.product.price
+            }))
+          }
+          
+          // console.log('🛒 Sending cart data to API:', cartData)
+          
+          fetch('/api/cart', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            productId: product._id,
-            quantity: quantity,
-            action: 'reserve'
-          }),
+            body: JSON.stringify(cartData),
           credentials: 'include'
-        })
-        
+          }).then(response => {
         if (!response.ok) {
-          const data = await response.json()
-          setError(data.message || 'Failed to add item to cart')
-          return
+              console.error('❌ Cart API error:', response.status, response.statusText)
+              return response.text().then(text => {
+                console.error('❌ Cart API error details:', text)
+              })
+            }
+            // console.log('✅ Cart saved successfully')
+          }).catch(err => {
+            console.error('Failed to save cart to database:', err)
+          })
         }
-        
-        // Products will be updated via WebSocket real-time updates
-      }
-      
-      // Update local cart state
-      setCart(prevCart => {
-        if (existingItem) {
-          return prevCart.map(item =>
-            item.product._id === product._id
-              ? { ...item, quantity: item.quantity + quantity }
-              : item
-          )
-        } else {
-          return [...prevCart, { product, quantity: quantity }]
-        }
+
+        return newCart
       })
+      }
       
       // Reset selected quantity for this product
       setSelectedQuantities(prev => ({
@@ -474,120 +687,290 @@ export default function PublicShopPage() {
         [product._id]: 1
       }))
       
-      // Broadcast cart update to other clients (only for shop items with stock reservation)
-      if (activeTab === 'shop') {
-        broadcastCartUpdate(product._id, 'reserve', quantity)
+      // No broadcast needed - cart operations don't affect availability
+      
+      // Show success message only for regular cart, not preorder
+      if (activeTab !== 'preorder') {
+        setSuccessMessage(`${quantity} x ${product.name} added to cart!`)
+      setTimeout(() => setSuccessMessage(''), 3000)
       }
       
-      // Show success message
-      const action = activeTab === 'preorder' ? 'added to preorder' : 'added to cart'
-      setSuccessMessage(`${quantity} x ${product.name} ${action}!`)
-      setTimeout(() => setSuccessMessage(''), 3000)
-      
     } catch (err) {
-      setError('Failed to add item to cart. Please try again.')
+      setError('Oops! Something went wrong while adding this item. Please try again.')
     } finally {
       setAddingToCart(null)
     }
   }
 
   const updateCartQuantity = async (productId: string, quantity: number) => {
-    const cartItem = cart.find(item => item.product._id === productId)
+    const currentCart = activeTab === 'preorder' ? preorderCart : cart
+    const cartItem = currentCart.find(item => item.product._id === productId)
     if (!cartItem) return
     
     const quantityDiff = quantity - cartItem.quantity
     
     if (quantity <= 0) {
-      // Remove from cart and release reserved stock
-      try {
-        await fetch('/api/products/reserve', {
+      // Remove from cart
+      if (activeTab === 'preorder') {
+        setPreorderCart(prevCart => prevCart.filter(item => item.product._id !== productId))
+      } else {
+        // Remove from regular cart and persist to MongoDB
+      setCart(prevCart => {
+        const newCart = prevCart.filter(item => item.product._id !== productId)
+        
+        // Persist cart to MongoDB for authenticated users
+        if (user && storeId) {
+          fetch('/api/cart', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            productId: productId,
-            quantity: cartItem.quantity,
-            action: 'release'
+              items: newCart.map(item => ({
+                product: item.product._id,
+                productName: item.product.name,
+                quantity: item.quantity,
+                unitPrice: item.product.price
+              }))
           }),
           credentials: 'include'
-        })
-        
-        // Update local state
-        setCart(prevCart => prevCart.filter(item => item.product._id !== productId))
-        
-        // Broadcast stock release to other clients
-        broadcastCartUpdate(productId, 'release', cartItem.quantity)
-      } catch (err) {
-        setError('Failed to update cart. Please try again.')
-      }
-    } else {
-      // Update quantity (reserve more or release some)
-      try {
-        const response = await fetch('/api/products/reserve', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            productId: productId,
-            quantity: Math.abs(quantityDiff),
-            action: quantityDiff > 0 ? 'reserve' : 'release'
-          }),
-          credentials: 'include'
-        })
-        
-        if (!response.ok) {
-          const data = await response.json()
-          setError(data.message || 'Failed to update cart')
-          return
+          }).catch(err => {
+            console.error('Failed to save cart to database:', err)
+          })
         }
         
-        // Update local state
-        setCart(prevCart =>
+        return newCart
+      })
+      }
+    } else {
+      // Update quantity
+      if (activeTab === 'preorder') {
+        setPreorderCart(prevCart => 
           prevCart.map(item =>
             item.product._id === productId
               ? { ...item, quantity: quantity }
               : item
           )
         )
+      } else {
+        // Update regular cart quantity and persist to MongoDB
+      setCart(prevCart => {
+        const newCart = prevCart.map(item =>
+          item.product._id === productId
+            ? { ...item, quantity: quantity }
+            : item
+        )
         
-        // Broadcast cart update to other clients
-        broadcastCartUpdate(productId, quantityDiff > 0 ? 'reserve' : 'release', Math.abs(quantityDiff))
-      } catch (err) {
-        setError('Failed to update cart. Please try again.')
+        // Persist cart to MongoDB for authenticated users
+        if (user && storeId) {
+          fetch('/api/cart', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+              items: newCart.map(item => ({
+                product: item.product._id,
+                productName: item.product.name,
+                quantity: item.quantity,
+                unitPrice: item.product.price
+              }))
+          }),
+          credentials: 'include'
+          }).catch(err => {
+            console.error('Failed to save cart to database:', err)
+          })
+        }
+        
+        return newCart
+      })
       }
     }
   }
 
   const removeFromCart = async (productId: string) => {
-    const cartItem = cart.find(item => item.product._id === productId)
-    if (!cartItem) return
-    
-    try {
-      // Release reserved stock
-      await fetch('/api/products/reserve', {
+    if (activeTab === 'preorder') {
+      setPreorderCart(prevCart => prevCart.filter(item => item.product._id !== productId))
+    } else {
+      // Remove from regular cart and persist to MongoDB
+    setCart(prevCart => {
+      const newCart = prevCart.filter(item => item.product._id !== productId)
+      
+      // Persist cart to MongoDB for authenticated users
+      if (user && storeId) {
+        fetch('/api/cart', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          productId: productId,
-          quantity: cartItem.quantity,
-          action: 'release'
+            items: newCart.map(item => ({
+              product: item.product._id,
+              productName: item.product.name,
+              quantity: item.quantity,
+              unitPrice: item.product.price
+            }))
         }),
         credentials: 'include'
-      })
+        }).catch(err => {
+          console.error('Failed to save cart to database:', err)
+        })
+      }
       
-      // Update local state
-      setCart(prevCart => prevCart.filter(item => item.product._id !== productId))
-    } catch (err) {
-      setError('Failed to remove item from cart. Please try again.')
+      return newCart
+    })
     }
   }
 
   const getTotalAmount = () => {
-    return cart.reduce((total, item) => total + (item.product.price * item.quantity), 0)
+    const currentCart = activeTab === 'preorder' ? preorderCart : cart
+    return currentCart.reduce((total, item) => total + (item.product.price * item.quantity), 0)
+  }
+
+  // Helper function to get status display text and colors
+  const getStatusDisplay = (approvalStatus: string, paymentStatus?: string) => {
+    // If there's payment status, use that for display
+    if (paymentStatus) {
+      switch (paymentStatus) {
+        case 'paid':
+          return {
+            text: 'paid',
+            bgColor: 'bg-green-500',
+            textColor: 'text-white'
+          }
+        case 'partial':
+          return {
+            text: 'partial',
+            bgColor: 'bg-blue-500',
+            textColor: 'text-white'
+          }
+        case 'pending':
+          return {
+            text: 'payable',
+            bgColor: 'bg-orange-500',
+            textColor: 'text-white'
+          }
+        case 'overdue':
+          return {
+            text: 'overdue',
+            bgColor: 'bg-red-500',
+            textColor: 'text-white'
+          }
+      }
+    }
+    
+    // Fallback to approval status
+    switch (approvalStatus) {
+      case 'pending':
+        return {
+          text: 'payable',
+          bgColor: 'bg-orange-500',
+          textColor: 'text-white'
+        }
+      case 'approved':
+        return {
+          text: 'paid',
+          bgColor: 'bg-green-500', 
+          textColor: 'text-white'
+        }
+      case 'rejected':
+        return {
+          text: 'rejected',
+          bgColor: 'bg-red-500',
+          textColor: 'text-white'
+        }
+      default:
+        return {
+          text: approvalStatus,
+          bgColor: 'bg-gray-500',
+          textColor: 'text-white'
+        }
+    }
+  }
+
+
+  // Load cart from MongoDB
+  const loadCartFromDB = async () => {
+    if (!user || !storeId) return
+    
+    try {
+      const response = await fetch('/api/cart', {
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.items && data.items.length > 0) {
+          // Convert cart items to local cart format
+          const cartItems = data.items.map((item: any) => {
+            const product = products.find(p => p._id === item.product)
+            if (product) {
+              return {
+                product,
+                quantity: item.quantity
+              }
+            }
+            return null
+          }).filter(Boolean)
+          
+          setCart(cartItems)
+          // console.log('🛒 Cart loaded from database:', cartItems.length, 'items')
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load cart from database:', err)
+    }
+  }
+
+  // Load confirmed reservations from MongoDB
+  const loadConfirmedReservations = async () => {
+    if (!user) return
+    
+    try {
+      const response = await fetch('/api/orders/public?limit=1000', {
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        const confirmedOrders = data.orders || []
+        
+        // Convert orders to confirmed reservations format
+        const reservations = confirmedOrders.map((order: any) => ({
+          id: order._id,
+          items: order.items.map((item: any) => {
+            // Find matching product from current products to get image
+            const matchingProduct = products.find(p => p.name === item.productName)
+            return {
+            productName: item.productName,
+              productImage: matchingProduct?.imageUrl,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice || (item.unitPrice * item.quantity)
+            }
+          }),
+          totalAmount: order.totalAmount || order.finalAmount,
+          status: order.status,
+          approvalStatus: order.approvalStatus,
+          paymentStatus: order.paymentStatus,
+          amountPaid: order.amountPaid || 0,
+          amountDue: order.amountDue || order.totalAmount || order.finalAmount,
+          payments: order.payments || [],
+          createdAt: order.createdAt
+        }))
+        
+        // Merge with existing local reservations to avoid overwriting new ones
+        setConfirmedReservations(prev => {
+          const existingIds = new Set(prev.map(r => r.id))
+          const newReservations = reservations.filter((r: any) => !existingIds.has(r.id))
+          const merged = [...prev, ...newReservations]
+          // console.log('✅ Confirmed reservations loaded from database:', reservations.length, 'from API,', prev.length, 'local, merged:', merged.length)
+          return merged
+        })
+      }
+    } catch (err) {
+      console.error('Failed to load confirmed reservations from database:', err)
+    }
   }
 
   const loadOrderForEditing = async (orderId: string) => {
@@ -626,64 +1009,236 @@ export default function PublicShopPage() {
     }
   }
 
+
+  // Calculate actual available quantity - always use raw stock quantity
+  // Cart items don't affect displayed availability in public shop
+  const getActualAvailableQuantity = (product: any) => {
+    return Math.max(0, product.quantity || 0)
+  }
+
+  const handlePlaceOrder = () => {
+    const currentCart = activeTab === 'preorder' ? preorderCart : cart
+    if (currentCart.length === 0) {
+      setError('Your cart is empty')
+      return
+    }
+    setShowConfirmModal(true)
+  }
+
   const confirmPlaceOrder = async () => {
-    if (cart.length === 0) return
+    const currentCart = activeTab === 'preorder' ? preorderCart : cart
+    if (currentCart.length === 0) return
+    
+    // Verify user is authenticated before placing order
+    if (!user) {
+      setError('You must be logged in to place orders')
+      router.push(`/${storeName}/login`)
+      return
+    }
+    
+    // console.log('🔐 User authenticated for order placement:', user.name, 'ID:', user.id)
     
     setSubmitting(true)
     setError('')
     setShowConfirmModal(false)
     
     try {
-      const orderItems = cart.map(item => ({
+      // Fetch fresh product data directly from API before reserving
+      // console.log('🔄 Fetching fresh product data for stock validation...')
+      let freshProducts: Product[] = []
+      
+      try {
+        const response = await fetch(`/api/products/public?store=${storeName}`, {
+          credentials: 'include'
+        })
+        if (response.ok) {
+          const data = await response.json()
+          freshProducts = data.products || []
+          // console.log('✅ Fresh product data loaded:', freshProducts.length, 'products')
+        } else {
+          console.error('Failed to fetch fresh product data')
+          setError('Unable to check product availability right now. Please try again.')
+          return
+        }
+      } catch (err) {
+        console.error('Error fetching fresh product data:', err)
+        setError('Unable to check product availability right now. Please try again.')
+        return
+      }
+      
+      // First, validate all items against fresh stock data
+      for (const item of currentCart) {
+        const freshProduct = freshProducts.find(p => p._id === item.product._id)
+        if (!freshProduct) {
+          setError(`Product ${item.product.name} not found. Please refresh and try again.`)
+          return
+        }
+        
+        // Stock validation debug info
+        // requestedQuantity: item.quantity,
+        // cachedQuantity: item.product.quantity,
+        // freshQuantity: freshProduct.quantity,
+        // available: freshProduct.quantity >= item.quantity
+        
+        if (freshProduct.quantity < item.quantity) {
+          setError(`Insufficient stock for ${item.product.name}. Available: ${freshProduct.quantity}, Requested: ${item.quantity}. Please adjust your order.`)
+          return
+        }
+      }
+      
+      // Skip the reservation loop - we'll deduct stock after order creation
+      // console.log('🔄 Skipping individual reservations - will deduct stock after order creation')
+      
+      // Now create the order
+      const orderItems = currentCart.map(item => ({
         productId: item.product._id,
         quantity: item.quantity
       }))
       
-      const url = editingOrder ? `/api/orders/public/${editingOrder}` : '/api/orders/public'
-      const method = editingOrder ? 'PUT' : 'POST'
+      // console.log('🔄 Creating order with items:', orderItems)
+      // console.log('🔄 User authenticated:', !!user, 'Store ID:', storeId)
       
-      const response = await fetch(url, {
-        method,
+      const response = await fetch('/api/orders/public', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           items: orderItems,
-          notes: ''
+          notes: '',
+          storeId: storeId // Ensure store ID is included
         }),
         credentials: 'include'
       })
       
-      const data = await response.json()
+      // console.log('📡 Raw API response status:', response.status, response.statusText)
+      
+      let data
+      try {
+        data = await response.json()
+        // console.log('📝 Order API response data:', data)
+      } catch (parseError) {
+        console.error('❌ Failed to parse API response:', parseError)
+        // console.log('📄 Raw response text:', await response.text())
+        throw new Error('Invalid API response format')
+      }
       
       if (response.ok) {
-        // Clear cart and localStorage - reservations are converted to order in the API
+        // Verify we got a valid order ID from database
+        const orderId = data.order?.id || data._id
+        if (!orderId) {
+          console.error('⚠️ Order created but no ID returned from database:', data)
+          setError('Order may not have been saved properly. Please check with admin.')
+          return
+        }
+        
+        // console.log('✅ Order successfully saved to MongoDB with ID:', orderId)
+        
+        // Now that order is confirmed, deduct stock for all items
+        // console.log('🔄 Order confirmed - now deducting stock for all items')
+        for (const item of currentCart) {
+          const freshProduct = freshProducts.find(p => p._id === item.product._id)!
+          // console.log(`📉 Deducting ${item.quantity} units from ${freshProduct.name}`)
+          
+          // Use different API endpoints based on active tab
+          const apiEndpoint = activeTab === 'preorder' ? '/api/preorders/reserve' : '/api/products/reserve'
+          const requestBody = activeTab === 'preorder' 
+            ? {
+                storeId: storeId,
+                productId: freshProduct._id,
+                quantity: item.quantity,
+                action: 'reserve'
+              }
+            : {
+                productId: freshProduct._id,
+                quantity: item.quantity,
+                action: 'reserve'
+              }
+          
+          try {
+            const reserveResponse = await fetch(apiEndpoint, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(requestBody),
+              credentials: 'include'
+            })
+            
+            if (!reserveResponse.ok) {
+              const reserveData = await reserveResponse.json()
+              console.error('⚠️ Stock deduction failed after order creation:', {
+                product: freshProduct.name,
+                quantity: item.quantity,
+                error: reserveData
+              })
+              // Note: Order is already created, so we log the error but don't fail the whole process
+            } else {
+              // console.log(`✅ Stock deducted successfully for ${freshProduct.name}`)
+              
+              // Broadcast the inventory change via WebSocket for preorders
+              if (activeTab === 'preorder') {
+                broadcastCartUpdate(freshProduct._id, 'reserve', item.quantity)
+              }
+            }
+          } catch (stockError) {
+            console.error('❌ Error during stock deduction:', stockError)
+            // Order is already created, continue with success flow
+          }
+        }
+        
+        // Add the order to confirmed reservations
+        const newReservation = {
+          id: orderId,
+          items: currentCart.map(item => ({
+            productName: item.product.name,
+            productImage: item.product.imageUrl,
+            quantity: item.quantity,
+            unitPrice: item.product.price,
+            totalPrice: item.product.price * item.quantity
+          })),
+          totalAmount: getTotalAmount(),
+          status: 'pending',
+          approvalStatus: 'pending',
+          paymentStatus: 'pending',
+          amountPaid: 0,
+          amountDue: getTotalAmount(),
+          payments: [],
+          createdAt: new Date().toISOString()
+        }
+        
+        // console.log('✅ Adding confirmed reservation to local state:', newReservation)
+        setConfirmedReservations(prev => [newReservation, ...prev])
+        
+        // Clear cart and localStorage
+        if (activeTab === 'preorder') {
+          setPreorderCart([])
+        } else {
         setCart([])
-        setEditingOrder(null)
+        }
         
         // Clear any pending cleanup since order was successfully placed
         localStorage.removeItem('pendingCartCleanup')
         
-        setSuccessMessage(editingOrder ? 'Order updated successfully!' : 'Order placed successfully! Waiting for admin approval.')
+        // Refresh products to show updated availability
+        await refreshProducts()
+        
+        // Reload confirmed reservations to ensure database sync
         setTimeout(() => {
-          router.push(`/${storeName}/orders`)
-        }, 1500)
+          loadConfirmedReservations()
+        }, 1000) // Small delay to ensure database write is complete
+        
+        setSuccessMessage('Reservation confirmed! Waiting for admin approval.')
+        setTimeout(() => setSuccessMessage(''), 3000)
       } else {
-        setError(data.message || 'Failed to place order')
+        console.error('❌ Order API failed:', { status: response.status, data })
+        setError(data.message || 'Unable to complete your order right now. Please try again.')
       }
     } catch (err) {
-      setError('Failed to place order. Please try again.')
+      setError('Something went wrong while placing your order. Please try again.')
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const handlePlaceOrder = () => {
-    if (cart.length === 0) {
-      setError('Your cart is empty')
-      return
-    }
-    setShowConfirmModal(true)
   }
 
   const logout = async () => {
@@ -704,8 +1259,8 @@ export default function PublicShopPage() {
     
     // Filter by tab
     if (activeTab === 'shop') {
-      // Show products with available stock (not preorder only)
-      return matchesSearch && ((product.quantity || product.quantity) > 0)
+      // Show all products (including sold out ones) - they'll be styled as disabled
+      return matchesSearch
     } else {
       // Show products available for preorder
       return matchesSearch && product.availableForPreorder
@@ -729,191 +1284,304 @@ export default function PublicShopPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-slate-800 shadow-sm border-b border-gray-200 dark:border-slate-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-100 truncate">
-                {store?.name}
-              </h1>
-              <span className="hidden sm:inline text-sm text-gray-500 dark:text-slate-400 truncate">
-                Welcome, {user?.name}
-              </span>
+      {/* Store Banner */}
+      <div 
+        className={`relative ${
+          (store?.bannerImageUrl && store.bannerImageUrl !== 'null' && store.bannerImageUrl !== '' && store.bannerImageUrl !== null) 
+            ? '' 
+            : 'bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-800 dark:to-purple-800'
+        }`}
+        style={(store?.bannerImageUrl && store.bannerImageUrl !== 'null' && store.bannerImageUrl !== '' && store.bannerImageUrl !== null) ? {
+          backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url("${store.bannerImageUrl}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          minHeight: '200px'
+        } : {}}
+      >
+        <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          {/* Top Bar with Customer Info and Logout */}
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 sm:mb-6">
+            <div className="text-center sm:text-left mb-4 sm:mb-0">
+              <div className="text-blue-100 dark:text-blue-200 text-sm sm:text-base font-medium">
+                Welcome back,
+              </div>
+              <div className="text-white text-lg sm:text-xl font-semibold">
+                {user?.name || 'Guest'}
+              </div>
             </div>
             
-            <div className="flex items-center space-x-2 sm:space-x-4">
-              <button
-                onClick={() => router.push(`/${storeName}/menu`)}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm sm:text-base whitespace-nowrap px-3 py-1 rounded-md touch-manipulation"
-              >
-                Menu
-              </button>
-              <button
-                onClick={() => router.push(`/${storeName}/preorder`)}
-                className="bg-green-600 hover:bg-green-700 text-white text-sm sm:text-base whitespace-nowrap px-3 py-1 rounded-md touch-manipulation"
-              >
-                Preorder
-              </button>
-              <button
-                onClick={() => router.push(`/${storeName}/orders`)}
-                className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm sm:text-base whitespace-nowrap px-2 py-1 touch-manipulation"
-              >
-                My Orders
-              </button>
               <button
                 onClick={logout}
-                className="text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-300 text-sm sm:text-base px-2 py-1 touch-manipulation"
+              className="self-center sm:self-start bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-all duration-200 font-medium text-sm sm:text-base backdrop-blur-sm border border-white/20 hover:border-white/30 touch-manipulation"
               >
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
                 Logout
               </button>
             </div>
+
+          <div className="text-center">
+            {/* Store Logo */}
+            <div className="mb-3">
+              <div className="inline-flex items-center justify-center w-24 h-24 bg-white dark:bg-slate-800 rounded-full shadow-lg overflow-hidden">
+                {(store?.logoImageUrl && store.logoImageUrl !== 'null' && store.logoImageUrl !== '' && store.logoImageUrl !== null) ? (
+                  <img 
+                    src={store.logoImageUrl} 
+                    alt={`${store.name} logo`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const target = e.currentTarget as HTMLImageElement
+                      target.style.display = 'none'
+                      // Show default icon when image fails
+                      const parent = target.parentElement
+                      if (parent) {
+                        parent.innerHTML = `
+                          <svg class="w-12 h-12 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H9m0 0H5m0 0h4m6 0v1a1 1 0 11-2 0v-1m2-1V9a1 1 0 00-1-1H8a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1z"></path>
+                          </svg>
+                        `
+                      }
+                    }}
+                  />
+                ) : (
+                <svg className="w-12 h-12 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H9m0 0H5m0 0h4m6 0v1a1 1 0 11-2 0v-1m2-1V9a1 1 0 00-1-1H8a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1z" />
+                </svg>
+                )}
           </div>
-          {/* Mobile user info */}
-          <div className="sm:hidden pb-2">
-            <span className="text-sm text-gray-500 dark:text-slate-400">
-              Welcome, {user?.name}
-            </span>
+          </div>
+            
+            {/* Store Name */}
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
+              {store?.name || storeName} Store
+            </h1>
+            
+            {/* Store Description */}
+            <p className="text-blue-100 dark:text-blue-200 text-base sm:text-lg mb-4 max-w-3xl mx-auto">
+              {activeTab === 'shop' 
+                ? 'Welcome to our Company Bazaar Week! Browse delicious homemade foods, fresh viands, tasty snacks, and unique products from fellow colleagues and departments. Support your teammates while enjoying amazing deals!'
+                : 'Get ahead of the bazaar rush! Preorder your favorite foods, viands, and special items from Company Bazaar Week. Secure the best homemade dishes and exclusive deals before they sell out!'
+              }
+            </p>
+            
+            {/* Bazaar Stats */}
+            <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
+              <div className="text-center">
+                <div className="text-xl font-bold text-white">{products.length}+</div>
+                <div className="text-blue-100 dark:text-blue-200 text-xs">Foods & Items</div>
+                  </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-white">🍽️</div>
+                <div className="text-blue-100 dark:text-blue-200 text-xs">Fresh Viands</div>
+                </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-white">🥘</div>
+                <div className="text-blue-100 dark:text-blue-200 text-xs">Homemade Dishes</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-white">🤝</div>
+                <div className="text-blue-100 dark:text-blue-200 text-xs">Support Colleagues</div>
+              </div>
+            </div>
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-        <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 lg:gap-8">
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        <div className="flex flex-col xl:grid xl:grid-cols-5 gap-4 lg:gap-6">
           {/* Products */}
-          <div className="lg:col-span-2 order-2 lg:order-1">
-            {/* Store Status Banner */}
-            {!isStoreOnlineForShopping && (
-              <div className="mb-4 sm:mb-6 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-                <div className="flex items-center">
-                  <div className="text-orange-600 dark:text-orange-400 mr-3">
-                    ⚠️
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-orange-800 dark:text-orange-200">
-                      Store Currently Offline
-                    </h3>
-                    <p className="text-sm text-orange-700 dark:text-orange-300">
-                      Regular shopping is unavailable, but you can still browse and preorder items.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+          <div className="xl:col-span-3 order-2 xl:order-1">
 
-            {/* Tabs */}
+            {/* Products Title */}
             <div className="mb-4 sm:mb-6">
-              <div className="border-b border-gray-200 dark:border-slate-700">
-                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                  {isStoreOnlineForShopping && (
-                    <button
-                      onClick={() => setActiveTab('shop')}
-                      className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === 'shop'
-                          ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-slate-400 dark:hover:text-slate-300'
-                      }`}
-                    >
-                      Shop Now
-                    </button>
-                  )}
-                  {/* <button
-                    onClick={() => setActiveTab('preorder')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'preorder'
-                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-slate-400 dark:hover:text-slate-300'
-                    }`}
-                  >
-                    Preorder
-                  </button> */}
-                </nav>
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100">
+                    {activeTab === 'shop' ? 'Available Products' : 'Preorder Items'}
+                  </h2>
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1 max-w-4xl">
+                    {activeTab === 'shop' 
+                      ? 'Discover mouth-watering foods and viands from your colleagues during Company Bazaar Week! From homemade kakanin and freshly cooked ulam to delicious snacks and handcrafted items, everything is ready for immediate purchase and pickup.'
+                      : 'Reserve the most sought-after foods and viands! Preorder popular dishes, special kakanin, fresh ulam, and exclusive items from your fellow employees to guarantee your favorites during the bazaar event.'
+                    }
+                  </p>
+                </div>
               </div>
             </div>
             
             {/* Search */}
             <div className="mb-4 sm:mb-6">
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 mb-3">
+                <div className="flex items-center text-gray-600 dark:text-slate-400 sm:ml-auto">
+                  <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                  <span className="font-bold text-gray-900 dark:text-slate-100 mr-2 text-lg">
+                    {filteredProducts.length}
+                  </span>
+                  <span className="text-base font-medium">
+                    {filteredProducts.length === 1 ? 'item available' : 'items available'}
+                  </span>
+                </div>
+              </div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
                 <input
                   type="text"
                   placeholder={`Search ${activeTab === 'shop' ? 'products' : 'preorder items'}...`}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="form-input flex-1"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm hover:shadow-md transition-all duration-200"
                 />
-                {/* WebSocket Connection Status */}
-                <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 dark:bg-slate-700 rounded-lg">
-                  <div 
-                    className={`w-2 h-2 rounded-full ${
-                      isWebSocketConnected ? 'bg-green-500' : 'bg-red-500'
-                    }`}
-                    title={isWebSocketConnected ? 'Connected to real-time updates' : 'Disconnected from real-time updates'}
-                  />
-                  <span className={`text-sm ${
-                    isWebSocketConnected ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                  }`}>
-                    {isWebSocketConnected ? 'Live' : 'Offline'}
-                  </span>
-                </div>
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  >
+                    <svg className="h-4 w-4 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Products Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               {filteredProducts.length === 0 ? (
-                <div className="col-span-full text-center py-8">
-                  <p className="text-gray-500 dark:text-slate-400">No products found</p>
+                <div className="col-span-full text-center py-12">
+                  <div className="max-w-sm mx-auto">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
+                      <svg className="w-8 h-8 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-500 dark:text-slate-400 text-lg font-medium mb-2">No products found</p>
+                    <p className="text-gray-400 dark:text-slate-500 text-sm">Try adjusting your search terms</p>
+                  </div>
                 </div>
               ) : (
-                filteredProducts.map((product) => (
+                filteredProducts.map((product) => {
+                  const isOutOfStock = getActualAvailableQuantity(product) === 0
+                  
+                  return (
                   <div
                     key={product._id}
-                    className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-4 hover:shadow-md transition-shadow"
-                  >
-                  {/* Product Image - Consistent Structure */}
-                  <div className="mb-4">
-                    <img
-                      src={product.imageUrl || '/images/products/default.svg'}
-                      alt={product.name}
-                      className="w-full h-32 sm:h-40 rounded-lg object-cover border border-gray-200 dark:border-slate-600"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/images/products/default.svg'
-                      }}
-                    />
-                  </div>
-
-                  {/* Product Info - Consistent Structure */}
-                  <div className="space-y-3">
-                    <div>
-                      <h3 className="font-medium text-gray-900 dark:text-slate-100 text-lg">{product.name}</h3>
-                      <p className="text-sm text-gray-600 dark:text-slate-400 min-h-[1.25rem]">
-                        {product.description || product.category || ''}
-                      </p>
-                    </div>
+                      className={`relative transition-all duration-300 ease-in-out ${
+                        isOutOfStock
+                          ? 'bg-slate-800/50 opacity-60 cursor-not-allowed shadow-[0_1px_3px_0_rgba(0,0,0,0.3),0_1px_2px_0_rgba(0,0,0,0.2)]'
+                          : 'bg-slate-800 cursor-pointer shadow-[0_1px_3px_0_rgba(0,0,0,0.3),0_1px_2px_0_rgba(0,0,0,0.2)] hover:shadow-[0_10px_15px_-3px_rgba(0,0,0,0.4),0_4px_6px_-2px_rgba(0,0,0,0.25)] hover:-translate-y-1'
+                      }`}
+                    >
+                      {/* Out of Stock Overlay */}
+                      {isOutOfStock && (
+                        <div className="absolute inset-0 bg-gray-900/30 flex items-center justify-center z-20">
+                          <div className="bg-red-500/95 backdrop-blur-sm text-white px-4 py-2 rounded-lg font-bold text-sm shadow-lg">
+                            OUT OF STOCK
+                          </div>
+                        </div>
+                      )}
                     
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-                        ₱{product.price.toFixed(2)}
-                      </span>
+                    {/* Product Image - Full Width at Top */}
+                    <div className="bg-slate-700 h-48 flex items-center justify-center overflow-hidden relative">
+                    {/* Stock Status Badge */}
+                    <div className="absolute top-3 right-3 z-10">
                       {activeTab === 'shop' ? (
-                        <span className="text-sm text-gray-500 dark:text-slate-400">
-                          Available: {product.quantity}
-                        </span>
+                        getActualAvailableQuantity(product) === 0 ? (
+                          <span className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded shadow-lg">
+                            SOLD OUT
+                          </span>
+                        ) : getActualAvailableQuantity(product) <= 5 ? (
+                          <span className="px-2 py-1 bg-orange-500 text-white text-xs font-bold rounded shadow-lg">
+                            {getActualAvailableQuantity(product)} LEFT
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 bg-green-500 text-white text-xs font-bold rounded shadow-lg">
+                            {getActualAvailableQuantity(product)} AVAILABLE
+                          </span>
+                        )
                       ) : (
-                        <span className="text-sm text-orange-600 dark:text-orange-400 font-medium">
-                          Preorder Available
+                        <span className="px-2 py-1 bg-blue-500 text-white text-xs font-bold rounded shadow-lg">
+                          {getActualAvailableQuantity(product) > 0 ? `${getActualAvailableQuantity(product)} FOR PREORDER` : 'PREORDER UNAVAILABLE'}
                         </span>
                       )}
                     </div>
+                    <img
+                      src={product.imageUrl || '/images/products/default.svg'}
+                      alt={product.name}
+                        className="max-w-full max-h-full object-contain rounded"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/images/products/default.svg'
+                      }}
+                        loading="lazy"
+                    />
+                  </div>
+
+                    {/* Card Content */}
+                    <div className="p-4">
+                    {/* Product Name */}
+                    <h3 className="text-white font-semibold text-lg mb-1 line-clamp-1">
+                      {product.name}
+                    </h3>
+
+                    {/* Product Category */}
+                    <p className="text-slate-300 text-sm mb-3 line-clamp-1">
+                      {product.description || product.category || 'Product'}
+                    </p>
+
+                      {/* Material Design Divider */}
+                      <div className="border-t border-slate-600 mb-4"></div>
+
+                    {/* Price & Stock Info */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-2xl font-bold text-blue-400">
+                        ₱{product.price.toFixed(2)}
+                      </div>
+                      <div className="text-right">
+                      {activeTab === 'shop' ? (
+                          <div>
+                            <div className={`text-sm font-bold ${
+                              getActualAvailableQuantity(product) === 0 
+                                ? 'text-red-400' 
+                                : getActualAvailableQuantity(product) <= 5 
+                                ? 'text-orange-400' 
+                                : 'text-green-400'
+                            }`}>
+                              {getActualAvailableQuantity(product) === 0 ? 'SOLD OUT' : `${getActualAvailableQuantity(product)} LEFT`}
+                            </div>
+                            <div className="text-xs text-slate-400 mt-1">
+                              {getActualAvailableQuantity(product) === 0 ? 'Not available' : 'Available now'}
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className={`text-sm font-bold ${
+                              getActualAvailableQuantity(product) === 0 
+                                ? 'text-red-400' 
+                                : getActualAvailableQuantity(product) <= 5 
+                                ? 'text-orange-400' 
+                                : 'text-green-400'
+                            }`}>
+                              {getActualAvailableQuantity(product) === 0 ? 'SOLD OUT' : `${getActualAvailableQuantity(product)} AVAILABLE`}
+                            </div>
+                            <div className="text-xs text-slate-400 mt-1">
+                              {getActualAvailableQuantity(product) === 0 ? 'Not available' : 'For preorder'}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   
-                  {/* Quantity Selector and Add to Cart */}
-                  <div className="space-y-2">
-                    {(activeTab === 'shop' ? (product.quantity || product.quantity) > 0 : activeTab === 'preorder') && (
-                      <div className="flex items-center space-x-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-slate-300">
-                          Qty:
-                        </label>
-                        <div className="flex items-center border border-gray-300 dark:border-slate-600 rounded-md">
+                    {/* Quantity Selector */}
+                      {(activeTab === 'shop' ? getActualAvailableQuantity(product) > 0 : activeTab === 'preorder') && !isOutOfStock && (
+                      <div className="flex items-center justify-center mb-4">
+                          <div className="flex items-center bg-slate-700 rounded shadow-sm border border-slate-600">
                           <button
                             onClick={() => {
                               const currentQty = selectedQuantities[product._id] || 1
@@ -924,32 +1592,21 @@ export default function PublicShopPage() {
                                 }))
                               }
                             }}
-                            className="px-2 py-1 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700"
+                              className="p-2 text-white hover:bg-slate-600 rounded-l-lg transition-colors"
                           >
-                            -
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                            </svg>
                           </button>
-                          <input
-                            type="number"
-                            min="1"
-                            max={activeTab === 'shop' ? (product.quantity || product.quantity) : undefined}
-                            value={selectedQuantities[product._id] || 1}
-                            onChange={(e) => {
-                              const maxQty = activeTab === 'shop' ? (product.quantity || product.quantity) : 999
-                              const value = Math.max(1, Math.min(
-                                parseInt(e.target.value) || 1,
-                                maxQty
-                              ))
-                              setSelectedQuantities(prev => ({
-                                ...prev,
-                                [product._id]: value
-                              }))
-                            }}
-                            className="w-16 px-2 py-1 text-center border-0 bg-transparent text-gray-900 dark:text-slate-100 focus:outline-none"
-                          />
+                          <div className="px-4 py-2 min-w-[60px] text-center">
+                            <span className="text-white font-medium">
+                              {selectedQuantities[product._id] || 1}
+                            </span>
+                          </div>
                           <button
                             onClick={() => {
                               const currentQty = selectedQuantities[product._id] || 1
-                              const maxQty = activeTab === 'shop' ? (product.quantity || product.quantity) : 999
+                              const maxQty = getActualAvailableQuantity(product)
                               if (currentQty < maxQty) {
                                 setSelectedQuantities(prev => ({
                                   ...prev,
@@ -957,61 +1614,135 @@ export default function PublicShopPage() {
                                 }))
                               }
                             }}
-                            className="px-2 py-1 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700"
+                            disabled={(selectedQuantities[product._id] || 1) >= getActualAvailableQuantity(product)}
+                            className={`p-2 rounded-r-lg transition-colors ${
+                              (selectedQuantities[product._id] || 1) >= getActualAvailableQuantity(product)
+                                ? 'text-slate-500 cursor-not-allowed'
+                                : 'text-white hover:bg-slate-600'
+                            }`}
                           >
-                            +
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
                           </button>
                         </div>
                       </div>
                     )}
                     
+                    {/* Add to Cart Button */}
                     <button
-                      onClick={() => addToCart(product, selectedQuantities[product._id] || 1)}
-                      disabled={activeTab === 'shop' ? ((product.quantity || product.quantity) === 0 || addingToCart === product._id) : addingToCart === product._id}
-                      className={`w-full py-3 px-4 rounded-lg transition-colors relative touch-manipulation ${
-                        activeTab === 'preorder' 
-                          ? 'bg-orange-600 text-white hover:bg-orange-700 disabled:bg-gray-300' 
-                          : 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300'
-                      } disabled:cursor-not-allowed`}
+                        onClick={() => !isOutOfStock && addToCart(product, selectedQuantities[product._id] || 1)}
+                        disabled={isOutOfStock || addingToCart === product._id}
+                        className={`w-full py-3 px-4 rounded font-medium transition-all duration-200 flex items-center justify-center gap-2 uppercase text-sm tracking-wide ${
+                          isOutOfStock
+                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                            : activeTab === 'preorder' 
+                            ? 'bg-orange-600 hover:bg-orange-700 text-white shadow-[0_2px_4px_-1px_rgba(0,0,0,0.3)] hover:shadow-[0_4px_8px_-2px_rgba(0,0,0,0.4)] hover:scale-[1.02]'
+                          : addingToCart === product._id
+                            ? 'bg-blue-600 text-white cursor-wait shadow-[0_2px_4px_-1px_rgba(0,0,0,0.3)]'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white shadow-[0_2px_4px_-1px_rgba(0,0,0,0.3)] hover:shadow-[0_4px_8px_-2px_rgba(0,0,0,0.4)] hover:scale-[1.02]'
+                        }`}
                     >
-                      {addingToCart === product._id ? (
-                        <div className="flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          {activeTab === 'preorder' ? 'Adding to Preorder...' : 'Adding...'}
-                        </div>
-                      ) : activeTab === 'shop' && (product.quantity || product.quantity) === 0 ? (
-                        'Out of Stock'
+                      {isOutOfStock ? (
+                        <>
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                          </svg>
+                          Out of Stock
+                        </>
+                      ) : addingToCart === product._id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                          {activeTab === 'preorder' ? 'Adding...' : 'Adding...'}
+                        </>
                       ) : (
-                        `${activeTab === 'preorder' ? 'Preorder' : 'Add'} ${selectedQuantities[product._id] || 1} ${activeTab === 'preorder' ? '' : 'to Cart'}`
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.1 5M7 13l-1.1 5m0 0h9.1M17 21a2 2 0 100-4 2 2 0 000 4zM9 21a2 2 0 100-4 2 2 0 000 4z" />
+                          </svg>
+                          {activeTab === 'preorder' 
+                            ? 'Preorder Now' 
+                            : `Add ${selectedQuantities[product._id] || 1} to Cart`
+                          }
+                        </>
                       )}
                     </button>
+                    </div> {/* End Card Content */}
                   </div>
-                  </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           </div>
 
-          {/* Cart */}
-          <div className="lg:col-span-1 order-1 lg:order-2">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-4 sm:p-6 lg:sticky lg:top-8">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">
-                Cart ({cart.length})
-              </h2>
-
-              {cart.length === 0 ? (
-                <p className="text-gray-500 dark:text-slate-400 text-center py-4">
-                  Your cart is empty
+          {/* Reserved Items */}
+          <div className="xl:col-span-2 order-1 xl:order-2">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-4 sm:p-6 lg:sticky lg:top-8 xl:mt-32">
+              {/* Reserved Items Header with Tabs */}
+              <div className="border-b border-gray-200 dark:border-slate-700 mb-4 pb-3">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 flex items-center">
+                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h1.586a1 1 0 01.707.293l1.414 1.414a1 1 0 00.707.293H20a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
+                    Reservations
+                  </h3>
+                </div>
+                
+                {/* Tabs */}
+                <div className="flex space-x-1">
+                  <button
+                    onClick={() => setActiveCartTab('cart')}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      activeCartTab === 'cart'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                        : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {activeTab === 'preorder' ? 'Preorder' : 'Cart'} ({activeTab === 'preorder' ? preorderCart.length : cart.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveCartTab('confirmed')}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      activeCartTab === 'confirmed'
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                        : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    Confirmed ({confirmedReservations.length})
+                  </button>
+                </div>
+              </div>
+              {activeCartTab === 'cart' ? (
+                (activeTab === 'preorder' ? preorderCart.length : cart.length) === 0 ? (
+                  <p className="text-gray-500 dark:text-slate-400 text-center py-8">
+                    <svg className="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h1.586a1 1 0 01.707.293l1.414 1.414a1 1 0 00.707.293H20a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
+                    No items in cart yet
+                    <br />
+                    <span className="text-xs">Start browsing to add your favorites!</span>
                 </p>
               ) : (
                 <>
                   <div className="space-y-3 mb-4 max-h-64 sm:max-h-96 overflow-y-auto">
-                    {cart.map((item) => (
+                    {(activeTab === 'preorder' ? preorderCart : cart).map((item) => (
                       <div
                         key={item.product._id}
-                        className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-3 bg-gray-50 dark:bg-slate-700 rounded-lg space-y-2 sm:space-y-0"
+                        className="flex items-center p-3 bg-gray-50 dark:bg-slate-700 rounded-lg space-x-3"
                       >
+                        {/* Product Image */}
+                        <div className="flex-shrink-0">
+                          <img
+                            src={item.product.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjNjM2MzYzIi8+CjxwYXRoIGQ9Ik0xMiAxNkwyMCAyNEwyOCAxNlYyOEgxMlYxNloiIGZpbGw9IiM5OTk5OTkiLz4KPGNpcmNsZSBjeD0iMTYiIGN5PSIyMCIgcj0iMiIgZmlsbD0iIzk5OTk5OSIvPgo8L3N2Zz4K'}
+                            alt={item.product.name}
+                            className="w-12 h-12 rounded-lg object-cover bg-gray-200 dark:bg-slate-600"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none'
+                            }}
+                          />
+                        </div>
+                        
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-gray-900 dark:text-slate-100 truncate">
                             {item.product.name}
@@ -1069,32 +1800,136 @@ export default function PublicShopPage() {
                       </div>
                     )}
 
-                    {/* Debug: Test refresh protection (remove in production) */}
-                    {process.env.NODE_ENV === 'development' && cart.length > 0 && (
-                      <div className="mb-4">
-                        <button
-                          onClick={testBeforeUnload}
-                          className="text-xs bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600"
-                        >
-                          🧪 Test Refresh Protection ({cart.length} items)
-                        </button>
-                      </div>
-                    )}
-
                     <button
                       onClick={handlePlaceOrder}
-                      disabled={submitting || cart.length === 0}
-                      className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                      disabled={submitting || (activeTab === 'preorder' ? preorderCart.length : cart.length) === 0}
+                      className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-3 px-4 rounded-lg disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
                     >
-                      {submitting ? 'Placing Order...' : 'Place Order'}
+                      {submitting ? (
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></div>
+                          Reserving Items...
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center">
+                          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h1.586a1 1 0 01.707.293l1.414 1.414a1 1 0 00.707.293H20a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                          </svg>
+                          Reserve Orders
+                        </div>
+                      )}
                     </button>
 
                     <p className="text-xs text-gray-500 dark:text-slate-400 mt-2 text-center">
-                      Orders require admin approval
+                      Reservations require admin approval
                     </p>
                   </div>
                 </>
+                )
+              ) : (
+                // Confirmed Reservations Tab
+                confirmedReservations.length === 0 ? (
+                  <p className="text-gray-500 dark:text-slate-400 text-center py-8">
+                    <svg className="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    No confirmed reservations yet
+                    <br />
+                    <span className="text-xs">Add items to cart and click "Reserve Orders" to confirm!</span>
+                  </p>
+                ) : (
+                  <div className="space-y-3 max-h-64 sm:max-h-96 overflow-y-auto">
+                    {confirmedReservations.map((reservation) => (
+                      <div
+                        key={reservation.id}
+                        className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center">
+                            <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                              Order #{reservation.id.slice(-6)}
+                            </span>
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusDisplay(reservation.approvalStatus, reservation.paymentStatus).bgColor} ${getStatusDisplay(reservation.approvalStatus, reservation.paymentStatus).textColor}`}>
+                            {getStatusDisplay(reservation.approvalStatus, reservation.paymentStatus).text}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-2 mb-3">
+                          {reservation.items.map((item: any, index: number) => (
+                            <div key={index} className="flex items-center space-x-3 text-sm">
+                              {/* Product Image */}
+                              <div className="flex-shrink-0">
+                                <img
+                                  src={item.productImage || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjNjM2MzYzIi8+CjxwYXRoIGQ9Ik0xMiAxNkwyMCAyNEwyOCAxNlYyOEgxMlYxNloiIGZpbGw9IiM5OTk5OTkiLz4KPGNpcmNsZSBjeD0iMTYiIGN5PSIyMCIgcj0iMiIgZmlsbD0iIzk5OTk5OSIvPgo8L3N2Zz4K'}
+                                  alt={item.productName}
+                                  className="w-8 h-8 rounded-md object-cover bg-gray-200 dark:bg-slate-600"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none'
+                                  }}
+                                />
+                              </div>
+                              
+                              <div className="flex-1">
+                              <span className="text-gray-700 dark:text-slate-300">
+                                {item.productName} × {item.quantity}
+                              </span>
+                              </div>
+                              
+                              <span className="text-gray-900 dark:text-slate-100 font-medium">
+                                ₱{item.totalPrice.toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Payment Information */}
+                        {reservation.paymentStatus === 'partial' && (
+                          <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                            <div className="text-xs font-medium text-blue-800 dark:text-blue-300 mb-1">Payment Details:</div>
+                            <div className="space-y-1 text-xs">
+                              <div className="flex justify-between">
+                                <span className="text-blue-700 dark:text-blue-300">Amount Paid:</span>
+                                <span className="font-medium text-blue-900 dark:text-blue-100">₱{reservation.amountPaid.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-blue-700 dark:text-blue-300">Amount Due:</span>
+                                <span className="font-medium text-blue-900 dark:text-blue-100">₱{reservation.amountDue.toFixed(2)}</span>
+                              </div>
+                              {reservation.payments && reservation.payments.length > 0 && (
+                                <div className="mt-2 pt-1 border-t border-blue-300 dark:border-blue-700">
+                                  <div className="text-blue-800 dark:text-blue-300 font-medium mb-1">Recent Payments:</div>
+                                  {reservation.payments.slice(0, 3).map((payment: any, index: number) => (
+                                    <div key={index} className="flex justify-between text-xs">
+                                      <span className="text-blue-600 dark:text-blue-400">
+                                        {new Date(payment.date).toLocaleDateString()} ({payment.method})
+                                      </span>
+                                      <span className="font-medium text-blue-900 dark:text-blue-100">₱{payment.amount.toFixed(2)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-600">
+                          <span className="text-xs text-gray-500 dark:text-slate-400">
+                            {new Date(reservation.createdAt).toLocaleDateString()}
+                          </span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">
+                            Total: ₱{reservation.totalAmount.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
               )}
+
             </div>
           </div>
         </div>
@@ -1127,14 +1962,41 @@ export default function PublicShopPage() {
                 </p>
                 
                 <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
-                  <h4 className="font-medium text-gray-900 dark:text-slate-100 mb-2">Order Summary</h4>
-                  <div className="space-y-2">
-                    {cart.map((item) => (
-                      <div key={item.product._id} className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-slate-400">
-                          {item.product.name} x {item.quantity}
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-gray-900 dark:text-slate-100">Order Summary</h4>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                      activeTab === 'preorder' 
+                        ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' 
+                        : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                    }`}>
+                      {activeTab === 'preorder' ? 'Preorder' : 'Regular Order'}
                         </span>
-                        <span className="text-gray-900 dark:text-slate-100">
+                  </div>
+                  <div className="space-y-2">
+                    {(activeTab === 'preorder' ? preorderCart : cart).map((item) => (
+                      <div key={item.product._id} className="flex items-center space-x-3 text-sm">
+                        {/* Product Image */}
+                        <div className="flex-shrink-0">
+                          <img
+                            src={item.product.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjNjM2MzYzIi8+CjxwYXRoIGQ9Ik0xMiAxNkwyMCAyNEwyOCAxNlYyOEgxMlYxNloiIGZpbGw9IiM5OTk5OTkiLz4KPGNpcmNsZSBjeD0iMTYiIGN5PSIyMCIgcj0iMiIgZmlsbD0iIzk5OTk5OSIvPgo8L3N2Zz4K'}
+                            alt={item.product.name}
+                            className="w-10 h-10 rounded-md object-cover bg-gray-200 dark:bg-slate-600"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none'
+                            }}
+                          />
+                        </div>
+                        
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900 dark:text-slate-100">
+                            {item.product.name}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400">
+                            ₱{item.product.price.toFixed(2)} × {item.quantity}
+                          </div>
+                        </div>
+                        
+                        <span className="text-gray-900 dark:text-slate-100 font-medium">
                           ₱{(item.product.price * item.quantity).toFixed(2)}
                         </span>
                       </div>
@@ -1150,8 +2012,8 @@ export default function PublicShopPage() {
 
                 <p className="text-sm text-gray-500 dark:text-slate-400">
                   {editingOrder 
-                    ? 'Your order changes will be saved and remain pending admin approval.'
-                    : 'Your order will be sent for admin approval. You will be notified once it\'s processed.'
+                    ? 'Your order changes will be saved and you can track the updated order status.'
+                    : 'Your order will be confirmed and you can track its status and payment details in the Confirmed tab.'
                   }
                 </p>
 
@@ -1181,4 +2043,3 @@ export default function PublicShopPage() {
     </div>
   )
 }
-

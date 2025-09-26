@@ -14,7 +14,8 @@ if (!cached) {
 }
 
 async function connectToDatabase() {
-  if (cached.conn) {
+  // Return existing connection if available and ready
+  if (cached.conn && cached.conn.connection.readyState === 1) {
     return cached.conn
   }
 
@@ -22,14 +23,23 @@ async function connectToDatabase() {
     const opts = {
       bufferCommands: false,
       maxPoolSize: 10, // Maintain up to 10 socket connections
-      serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
-      socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+      serverSelectionTimeoutMS: 3000, // Reduced timeout for faster failure
+      socketTimeoutMS: 20000, // Reduced socket timeout
+      connectTimeoutMS: 10000, // Connection timeout
+      heartbeatFrequencyMS: 10000, // Heartbeat frequency
+      retryWrites: true,
+      retryReads: true,
+      maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
       dbName: 'pos_db' // Explicitly set database name
     }
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
       console.log('✅ Connected to MongoDB')
       return mongoose
+    }).catch((error) => {
+      console.error('❌ MongoDB connection failed:', error.message)
+      cached.promise = null
+      throw error
     })
   }
 
@@ -37,8 +47,8 @@ async function connectToDatabase() {
     cached.conn = await cached.promise
   } catch (e) {
     cached.promise = null
-    console.error('❌ MongoDB connection error:', e)
-    throw e
+    console.error('❌ MongoDB connection error:', e.message)
+    throw new Error(`Database connection failed: ${e.message}`)
   }
 
   return cached.conn

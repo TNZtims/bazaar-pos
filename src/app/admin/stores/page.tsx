@@ -14,6 +14,9 @@ interface Store {
   isAdmin: boolean
   cashiers: string[]
   isOnline: boolean
+  isLocked: boolean
+  bannerImageUrl?: string
+  logoImageUrl?: string
   storeHours: {
     monday: { open: string, close: string, closed: boolean }
     tuesday: { open: string, close: string, closed: boolean }
@@ -41,10 +44,15 @@ export default function AdminStoresPage() {
     password: '',
     confirmPassword: '',
     isAdmin: false,
-    cashiers: ''
+    cashiers: '',
+    bannerImageUrl: '',
+    logoImageUrl: ''
   })
   const [isCreating, setIsCreating] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [togglingStore, setTogglingStore] = useState<string | null>(null)
+  const [uploadingBanner, setUploadingBanner] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
 
   // Redirect if not admin
   useEffect(() => {
@@ -64,6 +72,7 @@ export default function AdminStoresPage() {
       const response = await fetch('/api/admin/stores')
       if (response.ok) {
         const data = await response.json()
+        console.log('Fetched stores data:', data.stores) // Debug log
         setStores(data.stores || [])
       } else {
         error('Failed to fetch stores')
@@ -128,14 +137,22 @@ export default function AdminStoresPage() {
   }
 
   const handleEditStore = (store: Store) => {
+    console.log('Opening edit modal for store:', store) // Debug log
+    console.log('Store banner URL:', store.bannerImageUrl) // Debug log
+    console.log('Store logo URL:', store.logoImageUrl) // Debug log
+    
     setEditingStore(store)
-    setFormData({
+    const formDataToSet = {
       storeName: store.storeName,
       password: '',
       confirmPassword: '',
       isAdmin: store.isAdmin,
-      cashiers: store.cashiers.join(', ')
-    })
+      cashiers: store.cashiers.join(', '),
+      bannerImageUrl: store.bannerImageUrl || '',
+      logoImageUrl: store.logoImageUrl || ''
+    }
+    console.log('Setting form data:', formDataToSet) // Debug log
+    setFormData(formDataToSet)
     setShowEditModal(true)
   }
 
@@ -168,8 +185,12 @@ export default function AdminStoresPage() {
       const updateData: any = {
         storeName: formData.storeName,
         isAdmin: formData.isAdmin,
-        cashiers: formData.cashiers.split(',').map(c => c.trim()).filter(c => c)
+        cashiers: formData.cashiers.split(',').map(c => c.trim()).filter(c => c),
+        bannerImageUrl: formData.bannerImageUrl,
+        logoImageUrl: formData.logoImageUrl
       }
+      
+      console.log('Sending update data:', updateData) // Debug log
 
       // Only include password if it's being changed
       if (formData.password) {
@@ -186,14 +207,18 @@ export default function AdminStoresPage() {
       })
 
       const data = await response.json()
+      console.log('Update response:', data) // Debug log
 
       if (response.ok) {
+        console.log('Store updated successfully, updated store data:', data.store) // Debug log
         success('Store updated successfully!')
         setShowEditModal(false)
         setEditingStore(null)
         resetForm()
-        fetchStores()
+        // Refresh stores list to get updated image URLs
+        await fetchStores()
       } else {
+        console.error('Update failed:', data) // Debug log
         error(data.message || 'Failed to update store')
       }
     } catch (err) {
@@ -203,13 +228,76 @@ export default function AdminStoresPage() {
     }
   }
 
+  const handleImageUpload = async (file: File, type: 'banner' | 'logo') => {
+    const setUploading = type === 'banner' ? setUploadingBanner : setUploadingLogo
+    setUploading(true)
+    
+    try {
+      // Get presigned URL
+      const uploadResponse = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size
+        })
+      })
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json()
+        throw new Error(errorData.error || 'Failed to get upload URL')
+      }
+
+      const { uploadUrl, fileUrl } = await uploadResponse.json()
+
+      // Upload file to S3
+      const s3Response = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type }
+      })
+
+      if (!s3Response.ok) {
+        throw new Error('Failed to upload file')
+      }
+
+      // Update form data with the file URL
+      const fieldName = type === 'banner' ? 'bannerImageUrl' : 'logoImageUrl'
+      console.log(`Setting ${fieldName} to:`, fileUrl) // Debug log
+      
+      setFormData(prev => {
+        const newFormData = {
+          ...prev,
+          [fieldName]: fileUrl
+        }
+        console.log('Updated form data:', newFormData) // Debug log
+        return newFormData
+      })
+
+      success(`${type === 'banner' ? 'Banner' : 'Logo'} uploaded successfully!`)
+      
+      // Small delay to ensure state is fully updated
+      setTimeout(() => {
+        console.log('Form data after upload delay:', formData) // Debug log
+      }, 100)
+      
+    } catch (err: any) {
+      error(`Failed to upload ${type}: ${err.message}`)
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const resetForm = () => {
     setFormData({
       storeName: '',
       password: '',
       confirmPassword: '',
       isAdmin: false,
-      cashiers: ''
+      cashiers: '',
+      bannerImageUrl: '',
+      logoImageUrl: ''
     })
   }
 
@@ -234,6 +322,43 @@ export default function AdminStoresPage() {
       }
     } catch (err) {
       error('Error updating store status')
+    }
+  }
+
+  const toggleStoreLock = async (storeId: string, currentLockStatus: boolean) => {
+    // Prevent multiple clicks
+    if (togglingStore === storeId) return
+    
+    try {
+      setTogglingStore(storeId)
+      
+      const response = await fetch(`/api/admin/stores/${storeId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          isLocked: !currentLockStatus
+        }),
+        credentials: 'include'
+      })
+
+      const responseData = await response.json()
+
+      if (response.ok) {
+        success(`Store ${!currentLockStatus ? 'locked (closed to public)' : 'unlocked (opened to public)'} successfully!`)
+        // Wait for store list to refresh before clearing loading state
+        await fetchStores()
+        // Add a small delay to ensure UI has updated
+        await new Promise(resolve => setTimeout(resolve, 100))
+      } else {
+        error(responseData.message || 'Failed to update store lock status')
+      }
+    } catch (err) {
+      console.error('Error updating store lock status:', err)
+      error('Error updating store lock status')
+    } finally {
+      setTogglingStore(null)
     }
   }
 
@@ -284,6 +409,9 @@ export default function AdminStoresPage() {
                         Status
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        Public Access
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                         Cashiers
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
@@ -318,6 +446,54 @@ export default function AdminStoresPage() {
                               : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
                           }`}>
                             {store.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <button
+                            onClick={() => toggleStoreLock(store._id, store.isLocked || false)}
+                            disabled={togglingStore === store._id}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed ${
+                              togglingStore === store._id
+                                ? 'bg-gray-400'
+                                : store.isLocked
+                                ? 'bg-red-400'
+                                : 'bg-green-400'
+                            }`}
+                            title={
+                              togglingStore === store._id
+                                ? 'Processing...'
+                                : store.isLocked 
+                                ? 'Store is closed to public - Click to open' 
+                                : 'Store is open to public - Click to close'
+                            }
+                          >
+                            {togglingStore === store._id ? (
+                              // Loading spinner
+                              <div className="inline-flex h-4 w-4 items-center justify-center ml-3.5">
+                                <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent"></div>
+                              </div>
+                            ) : (
+                              // Normal toggle circle
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                  store.isLocked ? 'translate-x-1' : 'translate-x-6'
+                                }`}
+                              />
+                            )}
+                          </button>
+                          <span className={`ml-2 text-xs font-medium ${
+                            togglingStore === store._id
+                              ? 'text-gray-500 dark:text-gray-400'
+                              : store.isLocked
+                              ? 'text-red-500 dark:text-red-400'
+                              : 'text-green-500 dark:text-green-400'
+                          }`}>
+                            {togglingStore === store._id 
+                              ? 'Processing...' 
+                              : store.isLocked 
+                              ? 'Closed' 
+                              : 'Open'
+                            }
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
@@ -454,7 +630,7 @@ export default function AdminStoresPage() {
           {/* Edit Store Modal */}
           {showEditModal && editingStore && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-slate-800 rounded-xl max-w-md w-full p-6 border border-gray-200 dark:border-slate-700 shadow-2xl">
+              <div className="bg-white dark:bg-slate-800 rounded-xl max-w-2xl w-full p-6 border border-gray-200 dark:border-slate-700 shadow-2xl max-h-[90vh] overflow-y-auto">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">
                   Edit Store: {editingStore.storeName}
                 </h2>
@@ -513,6 +689,122 @@ export default function AdminStoresPage() {
                       className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="John Doe, Jane Smith"
                     />
+                  </div>
+
+                  {/* Banner Image Upload */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      Store Banner Image
+                    </label>
+                    <div className="space-y-2">
+                      {formData.bannerImageUrl && formData.bannerImageUrl !== '' && (
+                        <div className="relative">
+                          <img 
+                            src={formData.bannerImageUrl} 
+                            alt="Banner preview" 
+                            className="w-full h-24 object-cover rounded-md border border-gray-300 dark:border-slate-600"
+                            onError={(e) => {
+                              console.log('Banner image failed to load:', formData.bannerImageUrl)
+                              // Don't hide the container, just show a placeholder
+                              e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDIwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik04NS4zMzMzIDQySDExNC42NjdWNThIODUuMzMzM1Y0MloiIGZpbGw9IiM5Q0EzQUYiLz4KPHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEwIDEyQzExLjEwNDYgMTIgMTIgMTEuMTA0NiAxMiAxMEMxMiA4Ljg5NTQzIDExLjEwNDYgOCAxMCA4QzguODk1NDMgOCA4IDguODk1NDMgOCAxMEM4IDExLjEwNDYgOC44OTU0MyAxMiAxMCAxMloiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+Cjwvc3ZnPgo='
+                            }}
+                            onLoad={() => console.log('Banner image loaded successfully:', formData.bannerImageUrl)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, bannerImageUrl: '' })}
+                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-lg"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                          <div className="absolute bottom-1 left-1 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                            Banner Image
+                          </div>
+                        </div>
+                      )}
+                      {(!formData.bannerImageUrl || formData.bannerImageUrl === '') && (
+                        <div className="border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-md p-4 text-center">
+                          <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                          <p className="text-sm text-gray-500 dark:text-slate-400">No banner image uploaded</p>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) handleImageUpload(file, 'banner')
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        disabled={uploadingBanner}
+                      />
+                      {uploadingBanner && (
+                        <p className="text-sm text-blue-600 dark:text-blue-400">Uploading banner...</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Logo Image Upload */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      Store Logo Image
+                    </label>
+                    <div className="space-y-2">
+                      {formData.logoImageUrl && formData.logoImageUrl !== '' && (
+                        <div className="relative inline-block">
+                          <img 
+                            src={formData.logoImageUrl} 
+                            alt="Logo preview" 
+                            className="w-20 h-20 object-cover rounded-full border border-gray-300 dark:border-slate-600"
+                            onError={(e) => {
+                              console.log('Logo image failed to load:', formData.logoImageUrl)
+                              // Show a placeholder circle
+                              e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iNDAiIGN5PSI0MCIgcj0iNDAiIGZpbGw9IiNGM0Y0RjYiLz4KPHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDE0QzEzLjEwNDYgMTQgMTQgMTMuMTA0NiAxNCAxMkMxNCAxMC44OTU0IDEzLjEwNDYgMTAgMTIgMTBDMTAuODk1NCAxMCAxMCAxMC44OTU0IDEwIDEyQzEwIDEzLjEwNDYgMTAuODk1NCAxNCAxMiAxNFoiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+Cjwvc3ZnPgo='
+                            }}
+                            onLoad={() => console.log('Logo image loaded successfully:', formData.logoImageUrl)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, logoImageUrl: '' })}
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-lg"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                          <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-black/50 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                            Logo Image
+                          </div>
+                        </div>
+                      )}
+                      {(!formData.logoImageUrl || formData.logoImageUrl === '') && (
+                        <div className="border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-2">
+                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                      )}
+                      {(!formData.logoImageUrl || formData.logoImageUrl === '') && (
+                        <p className="text-sm text-gray-500 dark:text-slate-400 text-center mb-2">No logo image uploaded</p>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) handleImageUpload(file, 'logo')
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        disabled={uploadingLogo}
+                      />
+                      {uploadingLogo && (
+                        <p className="text-sm text-blue-600 dark:text-blue-400">Uploading logo...</p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center">

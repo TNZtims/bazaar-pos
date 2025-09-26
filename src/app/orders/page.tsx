@@ -603,7 +603,7 @@ export default function OrdersPage() {
                                 Pay
                               </button>
                             )}
-                            {(order.status === 'active' || order.paymentStatus !== 'paid') && (
+                            {(order.status === 'active' || order.paymentStatus !== 'paid') && order.paymentStatus !== 'partial' && (
                               <button
                                 onClick={() => openOrderEditModal(order)}
                                 className="inline-flex items-center px-3 py-1.5 border border-purple-300 dark:border-purple-600 text-xs font-medium rounded-md text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors"
@@ -615,7 +615,7 @@ export default function OrdersPage() {
                                 Edit
                               </button>
                             )}
-                            {order.status === 'active' && (
+                            {order.status === 'active' && order.paymentStatus !== 'partial' && (
                               <button
                                 onClick={() => handleCancelOrder(order._id)}
                                 className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-600 text-xs font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
@@ -627,7 +627,7 @@ export default function OrdersPage() {
                                 Cancel
                               </button>
                             )}
-                            {(order.paymentStatus === 'pending' || order.status === 'pending') && (
+                            {(order.paymentStatus === 'pending' || order.status === 'pending') && order.paymentStatus !== 'partial' && (
                               <button
                                 onClick={() => handleDeleteOrder(order._id)}
                                 disabled={deleting === order._id}
@@ -707,7 +707,7 @@ export default function OrdersPage() {
                           Pay
                         </button>
                       )}
-                      {(order.status === 'active' || order.paymentStatus !== 'paid') && (
+                      {(order.status === 'active' || order.paymentStatus !== 'paid') && order.paymentStatus !== 'partial' && (
                         <button
                           onClick={() => openOrderEditModal(order)}
                           className="inline-flex items-center px-2.5 py-1.5 border border-purple-300 dark:border-purple-600 text-xs font-medium rounded text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors"
@@ -718,7 +718,7 @@ export default function OrdersPage() {
                           Edit
                         </button>
                       )}
-                      {(order.paymentStatus === 'pending' || order.status === 'pending') && (
+                      {(order.paymentStatus === 'pending' || order.status === 'pending') && order.paymentStatus !== 'partial' && (
                         <button
                           onClick={() => handleDeleteOrder(order._id)}
                           disabled={deleting === order._id}

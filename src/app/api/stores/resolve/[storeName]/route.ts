@@ -27,7 +27,7 @@ export async function GET(
     const store = await Store.findOne({ 
       storeName: { $regex: new RegExp(`^${decodedStoreName}$`, 'i') },
       isActive: true 
-    }).select('_id storeName isOnline storeHours isActive')
+    }).select('_id storeName isOnline storeHours isActive isLocked bannerImageUrl logoImageUrl')
 
     if (!store) {
       return NextResponse.json(
@@ -39,10 +39,16 @@ export async function GET(
     // Check store status (hours, online status)
     const storeStatus = checkStoreStatus(store)
 
+    // Always return 200 OK, but include store accessibility in the response
     return NextResponse.json({
       id: store._id,
       name: store.storeName,
-      status: storeStatus
+      status: storeStatus,
+      isLocked: store.isLocked,
+      accessible: !store.isLocked, // true if store is open to public, false if closed
+      message: store.isLocked ? 'Store is currently closed to public access' : 'Store is open',
+      bannerImageUrl: store.bannerImageUrl,
+      logoImageUrl: store.logoImageUrl
     })
   } catch (error: any) {
     console.error('Error resolving store name:', error)

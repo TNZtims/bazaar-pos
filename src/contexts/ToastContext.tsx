@@ -33,7 +33,11 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     const id = Math.random().toString(36).substring(2, 9)
     const newToast: Toast = { ...toast, id }
     
-    setToasts(prev => [...prev, newToast])
+    setToasts(prev => {
+      const newToasts = [...prev, newToast]
+      // Limit to maximum 3 toasts - remove oldest ones if needed
+      return newToasts.slice(-3)
+    })
   }, [])
 
   const removeToast = useCallback((id: string) => {
@@ -91,7 +95,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
       {children}
       
       {/* Toast Container */}
-      <div className="fixed top-20 right-4 z-[100] space-y-3 pointer-events-none">
+      <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] space-y-3 pointer-events-none">
         {toasts.map(toast => (
           <div key={toast.id} className="pointer-events-auto">
             <ToastComponent

@@ -50,7 +50,7 @@ export async function PUT(
       )
     }
 
-    console.log(`🔄 Updating sale ${id} with action: ${action}`)
+    // console.log(`🔄 Updating sale ${id} with action: ${action}`)
     
     if (action === 'add_payment') {
       return await handleAddPayment(sale, updateData)
@@ -146,9 +146,9 @@ async function handleUpdateItems(sale: any, updateData: any) {
     )
   }
 
-  console.log(`📝 Updating items for sale ${sale._id}`)
-  console.log(`- Original items: ${sale.items.length}`)
-  console.log(`- New items: ${items?.length || 0}`)
+  // console.log(`📝 Updating items for sale ${sale._id}`)
+  // console.log(`- Original items: ${sale.items.length}`)
+  // console.log(`- New items: ${items?.length || 0}`)
   
   // Use intelligent fallback for transactions (same as main sales route)
   let useTransaction = true
@@ -246,20 +246,20 @@ async function handleUpdateItems(sale: any, updateData: any) {
       })
       
       await session.endSession()
-      console.log('✅ Sale items updated with transaction')
+      // console.log('✅ Sale items updated with transaction')
       
     } catch (transactionError: any) {
       await session.endSession()
       
       if (transactionError.code === 20 || transactionError.message.includes('replica set')) {
-        console.log('⚠️ Transactions not supported, falling back to regular operations')
+        // console.log('⚠️ Transactions not supported, falling back to regular operations')
         useTransaction = false
       } else {
         throw transactionError
       }
     }
   } catch (sessionError: any) {
-    console.log('⚠️ Session creation failed, falling back to regular operations')
+    // console.log('⚠️ Session creation failed, falling back to regular operations')
     useTransaction = false
   }
   
@@ -356,7 +356,7 @@ async function handleUpdateItems(sale: any, updateData: any) {
       )
     }
     
-    console.log('✅ Sale items updated without transaction')
+    // console.log('✅ Sale items updated without transaction')
   }
   
   return NextResponse.json(updatedSale)
@@ -396,7 +396,7 @@ async function handleUpdateOrderDetails(sale: any, updateData: any) {
     )
   }
 
-  console.log(`📝 Updating order details for sale ${sale._id}`)
+  // console.log(`📝 Updating order details for sale ${sale._id}`)
   
   // Update customer details
   if (customerName !== undefined) sale.customerName = customerName
@@ -434,7 +434,7 @@ async function handleUpdateOrderDetails(sale: any, updateData: any) {
       sale.amountDue = newFinalAmount
     }
     
-    console.log(`💰 Recalculated total: ₱${newFinalAmount}`)
+    // console.log(`💰 Recalculated total: ₱${newFinalAmount}`)
   }
   
   // Add modification history
@@ -453,7 +453,7 @@ async function handleUpdateOrderDetails(sale: any, updateData: any) {
   })
   
   const updatedSale = await sale.save()
-  console.log('✅ Order details updated successfully')
+  // console.log('✅ Order details updated successfully')
   return NextResponse.json(updatedSale)
 }
 
@@ -466,7 +466,7 @@ async function handleReactivateSale(sale: any) {
     )
   }
 
-  console.log(`🔄 Reactivating sale ${sale._id}`)
+  // console.log(`🔄 Reactivating sale ${sale._id}`)
   
   // Check if products are still available
   for (const item of sale.items) {
@@ -501,7 +501,7 @@ async function handleReactivateSale(sale: any) {
   }
   
   const updatedSale = await sale.save()
-  console.log('✅ Sale reactivated successfully')
+  // console.log('✅ Sale reactivated successfully')
   return NextResponse.json(updatedSale)
 }
 

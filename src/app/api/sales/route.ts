@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectToDatabase from '@/lib/mongodb'
 import Sale from '@/models/Sale'
 import Product from '@/models/Product'
+import Cart from '@/models/Cart'
 import { authenticateRequest } from '@/lib/auth'
 
 // GET /api/sales - Get all sales with pagination and filters
@@ -287,14 +288,14 @@ export async function POST(request: NextRequest) {
         
         // Check if it's a transaction support error
         if (transactionError.code === 20 || transactionError.message.includes('replica set')) {
-          console.log('⚠️ Transactions not supported, falling back to regular operations')
+          // console.log('⚠️ Transactions not supported, falling back to regular operations')
           useTransaction = false
         } else {
           throw transactionError
         }
       }
     } catch (sessionError: any) {
-      console.log('⚠️ Session creation failed, falling back to regular operations')
+      // console.log('⚠️ Session creation failed, falling back to regular operations')
       useTransaction = false
     }
     
@@ -380,6 +381,18 @@ export async function POST(request: NextRequest) {
           })
         }
       }
+    }
+    
+    // Clear user's cart after successful sale
+    try {
+      await Cart.findOneAndDelete({
+        userId: authContext.user._id,
+        storeId: authContext.store._id
+      })
+      // console.log('✅ Cart cleared after successful sale')
+    } catch (cartError) {
+      console.error('⚠️ Failed to clear cart after sale:', cartError)
+      // Don't fail the sale if cart clearing fails
     }
     
     return NextResponse.json(savedSale, { status: 201 })
