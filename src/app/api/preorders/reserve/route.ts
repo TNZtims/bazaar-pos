@@ -75,12 +75,12 @@ export async function POST(request: NextRequest) {
     
     // Check if we have enough quantity for reservation using the latest data
     // console.log('🔍 Stock validation in API:', {
-      productName: currentProduct.name,
-      action,
-      currentQuantity: currentProduct.quantity,
-      requestedQuantity: quantity,
-      hasEnoughStock: currentProduct.quantity >= quantity
-    })
+    //   productName: currentProduct.name,
+    //   action,
+    //   currentQuantity: currentProduct.quantity,
+    //   requestedQuantity: quantity,
+    //   hasEnoughStock: currentProduct.quantity >= quantity
+    // })
     
     if (action === 'reserve' && currentProduct.quantity < quantity) {
       console.error('❌ Insufficient stock detected:', {
@@ -100,11 +100,11 @@ export async function POST(request: NextRequest) {
     }
     
     // console.log('✅ Stock validation passed:', {
-      productName: currentProduct.name,
-      available: currentProduct.quantity,
-      requested: quantity,
-      willProceedWithReservation: true
-    })
+    //   productName: currentProduct.name,
+    //   available: currentProduct.quantity,
+    //   requested: quantity,
+    //   willProceedWithReservation: true
+    // })
     
     // Update the product quantity
     // console.log('Updating product quantity. Current:', currentProduct.quantity, 'Change:', quantityChange)
@@ -129,10 +129,10 @@ export async function POST(request: NextRequest) {
     // Broadcast the inventory change via WebSocket
     if (global.io) {
       // console.log('Broadcasting inventory change via WebSocket:', {
-        productId,
-        quantity: updatedProduct.quantity,
-        storeRoom: `store-${storeId}`
-      })
+      //   productId,
+      //   quantity: updatedProduct.quantity,
+      //   storeRoom: `store-${storeId}`
+      // })
       
       global.io.to(`store-${storeId}`).emit('inventory-changed', {
         productId,
