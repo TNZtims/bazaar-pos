@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Layout from '@/components/Layout'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import ImageUpload from '@/components/ImageUpload'
@@ -26,6 +26,66 @@ interface Product {
   seller?: string            // Seller/supplier name
   imageUrl?: string
   createdAt: string
+}
+
+// Component for truncated description with hover functionality
+interface TruncatedDescriptionProps {
+  description: string
+  maxLength?: number
+}
+
+function TruncatedDescription({ description, maxLength = 50 }: TruncatedDescriptionProps) {
+  const [isHovered, setIsHovered] = useState(false)
+  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 })
+  const spanRef = useRef<HTMLSpanElement>(null)
+  
+  const shouldTruncate = description.length > maxLength
+  const displayText = shouldTruncate 
+    ? `${description.substring(0, maxLength)}...` 
+    : description
+
+  const handleMouseEnter = () => {
+    setIsHovered(true)
+    if (spanRef.current) {
+      const rect = spanRef.current.getBoundingClientRect()
+      setTooltipPosition({
+        top: rect.top - 10, // Position above the text
+        left: rect.left
+      })
+    }
+  }
+
+  return (
+    <div 
+      className="text-sm text-gray-500 dark:text-slate-400 relative inline-block"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <span 
+        ref={spanRef}
+        className={shouldTruncate ? 'cursor-help' : ''}
+      >
+        {displayText}
+      </span>
+      {shouldTruncate && isHovered && (
+        <div 
+          className="fixed z-[9999] bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg p-3 shadow-xl max-w-sm whitespace-normal text-gray-900 dark:text-slate-100 pointer-events-none min-w-[200px]"
+          style={{
+            top: `${tooltipPosition.top}px`,
+            left: `${tooltipPosition.left}px`,
+            transform: 'translateY(-100%)'
+          }}
+        >
+          <div className="text-sm leading-relaxed break-words">
+            {description}
+          </div>
+          {/* Arrow pointing down to the text */}
+          <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-300 dark:border-t-slate-600"></div>
+          <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-white dark:border-t-slate-800 transform translate-y-[-1px]"></div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function ProductsPage() {
@@ -408,7 +468,7 @@ export default function ProductsPage() {
                         <div>
                           <div className="text-sm font-medium text-gray-900 dark:text-slate-100">{product.name}</div>
                           {product.description && (
-                            <div className="text-sm text-gray-500 dark:text-slate-400">{product.description}</div>
+                            <TruncatedDescription description={product.description} />
                           )}
                           {product.sku && (
                             <div className="text-xs text-gray-400 dark:text-slate-500">SKU: {product.sku}</div>
