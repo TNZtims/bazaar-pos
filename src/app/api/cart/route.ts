@@ -7,14 +7,36 @@ import { authenticateRequest, authenticateCustomerRequest } from '@/lib/auth'
 // GET /api/cart - Get user's cart
 export async function GET(request: NextRequest) {
   try {
-    // Try customer authentication first, then admin authentication
-    let authContext = await authenticateCustomerRequest(request)
+    // Check if this is a request from admin pages (sales or products management)
+    const referer = request.headers.get('referer') || ''
+    const isAdminPageRequest = referer.includes('/sales') || referer.includes('/products')
+    
+    let authContext: any = null
     let isCustomer = true
     
-    if (!authContext) {
-      // Fall back to admin authentication for store management
+    if (isAdminPageRequest) {
+      // For admin page requests (sales/products), ONLY use admin authentication
+      console.log('🔒 Cart API: Admin page request detected - using ADMIN auth only')
       authContext = await authenticateRequest(request)
       isCustomer = false
+      
+      if (!authContext) {
+        console.log('❌ Cart API: Admin authentication failed for admin page')
+        return NextResponse.json(
+          { message: 'Admin authentication required for admin page' },
+          { status: 401 }
+        )
+      }
+    } else {
+      // For public store requests, try customer authentication first, then admin
+      authContext = await authenticateCustomerRequest(request)
+      isCustomer = true
+      
+      if (!authContext) {
+        // Fall back to admin authentication for store management
+        authContext = await authenticateRequest(request)
+        isCustomer = false
+      }
     }
     
     if (!authContext) {
@@ -70,11 +92,16 @@ export async function GET(request: NextRequest) {
       }
       
       if (!cart) {
-        return NextResponse.json(emptyCartResponse)
+        const response = NextResponse.json(emptyCartResponse)
+        // Add no-cache headers to prevent caching of cart data
+        response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+        response.headers.set('Pragma', 'no-cache')
+        response.headers.set('Expires', '0')
+        return response
       }
       
       // Return cart data without complex validation for now
-      return NextResponse.json({
+      const cartResponse = NextResponse.json({
         items: cart.items.map(item => ({
           product: {
             _id: item.product,
@@ -98,10 +125,21 @@ export async function GET(request: NextRequest) {
         selectedCashier: cart.selectedCashier || ''
       })
       
+      // Add no-cache headers to prevent caching of cart data
+      cartResponse.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+      cartResponse.headers.set('Pragma', 'no-cache')
+      cartResponse.headers.set('Expires', '0')
+      
+      return cartResponse
+      
     } catch (cartError) {
       console.error('Error with cart operations:', cartError)
       // Return empty cart if there are any issues
-      return NextResponse.json(emptyCartResponse)
+      const errorResponse = NextResponse.json(emptyCartResponse)
+      errorResponse.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+      errorResponse.headers.set('Pragma', 'no-cache')
+      errorResponse.headers.set('Expires', '0')
+      return errorResponse
     }
     
   } catch (error) {
@@ -124,14 +162,36 @@ export async function GET(request: NextRequest) {
 // POST /api/cart - Add item to cart
 export async function POST(request: NextRequest) {
   try {
-    // Try customer authentication first, then admin authentication
-    let authContext = await authenticateCustomerRequest(request)
+    // Check if this is a request from admin pages (sales or products management)
+    const referer = request.headers.get('referer') || ''
+    const isAdminPageRequest = referer.includes('/sales') || referer.includes('/products')
+    
+    let authContext: any = null
     let isCustomer = true
     
-    if (!authContext) {
-      // Fall back to admin authentication for store management
+    if (isAdminPageRequest) {
+      // For admin page requests (sales/products), ONLY use admin authentication
+      console.log('🔒 Cart POST API: Admin page request detected - using ADMIN auth only')
       authContext = await authenticateRequest(request)
       isCustomer = false
+      
+      if (!authContext) {
+        console.log('❌ Cart POST API: Admin authentication failed for admin page')
+        return NextResponse.json(
+          { message: 'Admin authentication required for admin page' },
+          { status: 401 }
+        )
+      }
+    } else {
+      // For public store requests, try customer authentication first, then admin
+      authContext = await authenticateCustomerRequest(request)
+      isCustomer = true
+      
+      if (!authContext) {
+        // Fall back to admin authentication for store management
+        authContext = await authenticateRequest(request)
+        isCustomer = false
+      }
     }
     
     if (!authContext) {
@@ -333,14 +393,36 @@ export async function POST(request: NextRequest) {
 // PUT /api/cart - Update cart (items, customer info, etc.)
 export async function PUT(request: NextRequest) {
   try {
-    // Try customer authentication first, then admin authentication
-    let authContext = await authenticateCustomerRequest(request)
+    // Check if this is a request from admin pages (sales or products management)
+    const referer = request.headers.get('referer') || ''
+    const isAdminPageRequest = referer.includes('/sales') || referer.includes('/products')
+    
+    let authContext: any = null
     let isCustomer = true
     
-    if (!authContext) {
-      // Fall back to admin authentication for store management
+    if (isAdminPageRequest) {
+      // For admin page requests (sales/products), ONLY use admin authentication
+      console.log('🔒 Cart PUT API: Admin page request detected - using ADMIN auth only')
       authContext = await authenticateRequest(request)
       isCustomer = false
+      
+      if (!authContext) {
+        console.log('❌ Cart PUT API: Admin authentication failed for admin page')
+        return NextResponse.json(
+          { message: 'Admin authentication required for admin page' },
+          { status: 401 }
+        )
+      }
+    } else {
+      // For public store requests, try customer authentication first, then admin
+      authContext = await authenticateCustomerRequest(request)
+      isCustomer = true
+      
+      if (!authContext) {
+        // Fall back to admin authentication for store management
+        authContext = await authenticateRequest(request)
+        isCustomer = false
+      }
     }
     
     if (!authContext) {
@@ -489,14 +571,36 @@ export async function PUT(request: NextRequest) {
 // DELETE /api/cart - Clear cart
 export async function DELETE(request: NextRequest) {
   try {
-    // Try customer authentication first, then admin authentication
-    let authContext = await authenticateCustomerRequest(request)
+    // Check if this is a request from admin pages (sales or products management)
+    const referer = request.headers.get('referer') || ''
+    const isAdminPageRequest = referer.includes('/sales') || referer.includes('/products')
+    
+    let authContext: any = null
     let isCustomer = true
     
-    if (!authContext) {
-      // Fall back to admin authentication for store management
+    if (isAdminPageRequest) {
+      // For admin page requests (sales/products), ONLY use admin authentication
+      console.log('🔒 Cart DELETE API: Admin page request detected - using ADMIN auth only')
       authContext = await authenticateRequest(request)
       isCustomer = false
+      
+      if (!authContext) {
+        console.log('❌ Cart DELETE API: Admin authentication failed for admin page')
+        return NextResponse.json(
+          { message: 'Admin authentication required for admin page' },
+          { status: 401 }
+        )
+      }
+    } else {
+      // For public store requests, try customer authentication first, then admin
+      authContext = await authenticateCustomerRequest(request)
+      isCustomer = true
+
+      if (!authContext) {
+        // Fall back to admin authentication for store management
+        authContext = await authenticateRequest(request)
+        isCustomer = false
+      }
     }
     
     if (!authContext) {

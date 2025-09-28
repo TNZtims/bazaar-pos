@@ -106,11 +106,23 @@ export async function POST(request: NextRequest) {
       
       // Broadcast inventory update via WebSocket
       if ((global as any).io) {
+        console.log('🔊 Broadcasting inventory change via WebSocket (products/reserve):', {
+          productId: updatedProduct._id.toString(),
+          productName: updatedProduct.name,
+          quantity: updatedProduct.quantity,
+          storeRoom: `store-${String(customerAuth.store._id)}`,
+          timestamp: new Date().toISOString()
+        })
+        
         (global as any).io.to(`store-${String(customerAuth.store._id)}`).emit('inventory-changed', {
           productId: updatedProduct._id.toString(),
           quantity: updatedProduct.quantity,
           timestamp: new Date().toISOString()
         })
+        
+        console.log('✅ WebSocket broadcast sent successfully (products/reserve)')
+      } else {
+        console.log('❌ WebSocket not available - global.io is null (products/reserve)')
       }
       
       return NextResponse.json({
@@ -140,11 +152,23 @@ export async function POST(request: NextRequest) {
       
       // Broadcast inventory update via WebSocket
       if ((global as any).io) {
+        console.log('🔊 Broadcasting inventory change via WebSocket (products/reserve - release):', {
+          productId: updatedProduct._id.toString(),
+          productName: updatedProduct.name,
+          quantity: updatedProduct.quantity,
+          storeRoom: `store-${String(customerAuth.store._id)}`,
+          timestamp: new Date().toISOString()
+        })
+        
         (global as any).io.to(`store-${String(customerAuth.store._id)}`).emit('inventory-changed', {
           productId: updatedProduct._id.toString(),
           quantity: updatedProduct.quantity,
           timestamp: new Date().toISOString()
         })
+        
+        console.log('✅ WebSocket broadcast sent successfully (products/reserve - release)')
+      } else {
+        console.log('❌ WebSocket not available - global.io is null (products/reserve - release)')
       }
       
       return NextResponse.json({

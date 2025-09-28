@@ -7,14 +7,36 @@ import { authenticateRequest, authenticateCustomerRequest } from '@/lib/auth'
 // GET /api/products - Get all products with optional search and pagination
 export async function GET(request: NextRequest) {
   try {
-    // Try customer authentication first, then admin authentication
-    let authContext: any = await authenticateCustomerRequest(request)
+    // Check if this is a request from admin pages (sales or products management)
+    const referer = request.headers.get('referer') || ''
+    const isAdminPageRequest = referer.includes('/sales') || referer.includes('/products')
+    
+    let authContext: any = null
     let isCustomer = true
     
-    if (!authContext) {
-      // Fall back to admin authentication for store management
+    if (isAdminPageRequest) {
+      // For admin page requests (sales/products), ONLY use admin authentication
+      console.log('🔒 Products API: Admin page request detected - using ADMIN auth only')
       authContext = await authenticateRequest(request)
       isCustomer = false
+      
+      if (!authContext) {
+        console.log('❌ Products API: Admin authentication failed for admin page')
+        return NextResponse.json(
+          { message: 'Admin authentication required for admin pages' },
+          { status: 401 }
+        )
+      }
+    } else {
+      // For public store requests, try customer authentication first, then admin
+      authContext = await authenticateCustomerRequest(request)
+      isCustomer = true
+      
+      if (!authContext) {
+        // Fall back to admin authentication for store management
+        authContext = await authenticateRequest(request)
+        isCustomer = false
+      }
     }
     
     // If authentication fails, provide a fallback for development
@@ -62,6 +84,7 @@ export async function GET(request: NextRequest) {
     
     // Filter by store - only show products from the authenticated store
     query.storeId = authContext.store._id
+    console.log(`🔍 Products API: Filtering products for store ${authContext.store.storeName} (ID: ${authContext.store._id})`)
     
     // Search functionality
     if (search) {
@@ -129,12 +152,19 @@ export async function GET(request: NextRequest) {
       }
     })
     
-    return NextResponse.json({
+    const response = NextResponse.json({
       products: productsWithAvailability,
       totalPages: Math.ceil(total / limit),
       currentPage: page,
       total
     })
+    
+    // Add no-cache headers to prevent caching of product data
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+    
+    return response
   } catch (error: any) {
     return NextResponse.json(
       { message: 'Error fetching products', error: error.message },
@@ -184,13 +214,51 @@ export async function POST(request: NextRequest) {
     
     const savedProduct = await product.save()
     
-    // Broadcast inventory update via WebSocket
+    // Broadcast new product creation via WebSocket
+    console.log('🔍 Checking WebSocket availability:', {
+      hasGlobalIo: !!(global as any).io,
+      storeId: authContext.store._id,
+      productName: savedProduct.name
+    })
+    
     if ((global as any).io) {
-      (global as any).io.to(`store-${authContext.store._id}`).emit('inventory-changed', {
-        productId: (savedProduct._id as any).toString(),
-        quantity: savedProduct.quantity,
-        timestamp: new Date().toISOString()
-      })
+      try {
+        // Broadcast inventory change for existing listeners
+        (global as any).io.to(`store-${authContext.store._id}`).emit('inventory-changed', {
+          productId: (savedProduct._id as any).toString(),
+          quantity: savedProduct.quantity,
+          timestamp: new Date().toISOString()
+        });
+        console.log('📡 Broadcasted inventory-changed event');
+        
+        // Broadcast new product creation with full details
+        (global as any).io.to(`store-${authContext.store._id}`).emit('product-created', {
+          product: {
+            _id: (savedProduct._id as any).toString(),
+            name: savedProduct.name,
+            price: savedProduct.price,
+            cost: savedProduct.cost,
+            quantity: savedProduct.quantity,
+            availableForPreorder: savedProduct.availableForPreorder,
+            description: savedProduct.description,
+            category: savedProduct.category,
+            sku: savedProduct.sku,
+            seller: savedProduct.seller,
+            imageUrl: savedProduct.imageUrl,
+            storeId: (savedProduct.storeId as any).toString(),
+            createdAt: savedProduct.createdAt,
+            updatedAt: savedProduct.updatedAt
+          },
+          timestamp: new Date().toISOString()
+        });
+        console.log('📡 Broadcasted product-created event');
+        
+        console.log(`📦 Broadcasted new product creation: ${savedProduct.name} (ID: ${savedProduct._id})`);
+      } catch (wsError) {
+        console.error('❌ WebSocket broadcasting error:', wsError)
+      }
+    } else {
+      console.log('❌ WebSocket server not available - cannot broadcast product creation')
     }
     
     return NextResponse.json(savedProduct, { status: 201 })

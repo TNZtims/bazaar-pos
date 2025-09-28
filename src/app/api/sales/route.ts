@@ -129,6 +129,8 @@ export async function POST(request: NextRequest) {
     
     await connectToDatabase()
     
+    console.log(`💰 Sales API POST: Creating sale for store ${authContext.store.storeName} (ID: ${authContext.store._id})`)
+    
     const body = await request.json()
     const { 
       items, 
@@ -141,13 +143,22 @@ export async function POST(request: NextRequest) {
       customerName, 
       customerPhone,
       customerEmail,
-      notes,
-      cashier 
+      notes
     } = body
+    
+    // Use cashier from authentication context
+    const cashier = authContext.selectedCashier
     
     if (!items || items.length === 0) {
       return NextResponse.json(
         { message: 'Items are required' },
+        { status: 400 }
+      )
+    }
+
+    if (!cashier) {
+      return NextResponse.json(
+        { message: 'Cashier information is required. Please log in again.' },
         { status: 400 }
       )
     }
@@ -156,18 +167,34 @@ export async function POST(request: NextRequest) {
     const saleItems: any[] = []
     let totalAmount = 0
     
+    console.log(`🛒 Processing ${items.length} items for sale:`, items.map((i: any) => ({ productId: i.productId, quantity: i.quantity })))
+    
     for (const item of items) {
+      console.log(`🔍 Looking for product ${item.productId} in store ${authContext.store._id}`)
+      
       const product = await Product.findOne({ 
         _id: item.productId, 
         storeId: authContext.store._id 
       })
       
       if (!product) {
+        console.log(`❌ Product ${item.productId} NOT FOUND in store ${authContext.store._id} (${authContext.store.storeName})`)
+        
+        // Let's check if this product exists in ANY store
+        const productInAnyStore = await Product.findOne({ _id: item.productId })
+        if (productInAnyStore) {
+          console.log(`⚠️ Product ${item.productId} EXISTS in store ${productInAnyStore.storeId}, but not in current store ${authContext.store._id}`)
+        } else {
+          console.log(`💀 Product ${item.productId} does not exist in ANY store`)
+        }
+        
         return NextResponse.json(
           { message: `Product not found: ${item.productId}` },
           { status: 404 }
         )
       }
+      
+      console.log(`✅ Found product: ${product.name} in store ${authContext.store._id}`)
       
       if (product.quantity < item.quantity) {
         return NextResponse.json(
@@ -252,6 +279,21 @@ export async function POST(request: NextRequest) {
           
           savedSale = await sale.save({ session })
           
+          // Broadcast new sale/order notification via WebSocket
+          if ((global as any).io) {
+            (global as any).io.to(`store-${String(authContext.store._id)}`).emit('order-created', {
+              orderId: String(savedSale._id),
+              customerName: savedSale.customerName || 'Walk-in Customer',
+              totalAmount: savedSale.finalAmount,
+              itemCount: savedSale.items.length,
+              status: savedSale.status,
+              approvalStatus: savedSale.approvalStatus || 'approved', // Sales are typically auto-approved
+              timestamp: new Date().toISOString(),
+              source: 'sales' // Indicate this came from sales page
+            })
+            console.log(`📋 Broadcasted new sale notification: ${savedSale.customerName || 'Walk-in'} - ₱${savedSale.finalAmount}`)
+          }
+          
           // Update product quantities with proper reservation handling
           for (const item of items) {
             // For admin sales, items might have been reserved through cart or might be direct sales
@@ -275,7 +317,7 @@ export async function POST(request: NextRequest) {
             }
             
             // Double-check that we didn't go below zero
-            if (updateResult.totalQuantity < 0) {
+            if (updateResult.quantity < 0) {
               throw new Error(`Product ${updateResult.name} would have negative stock after sale`)
             }
           }
@@ -330,6 +372,21 @@ export async function POST(request: NextRequest) {
       
       savedSale = await sale.save()
       
+      // Broadcast new sale/order notification via WebSocket
+      if ((global as any).io) {
+        (global as any).io.to(`store-${String(authContext.store._id)}`).emit('order-created', {
+          orderId: String(savedSale._id),
+          customerName: savedSale.customerName || 'Walk-in Customer',
+          totalAmount: savedSale.finalAmount,
+          itemCount: savedSale.items.length,
+          status: savedSale.status,
+          approvalStatus: savedSale.approvalStatus || 'approved', // Sales are typically auto-approved
+          timestamp: new Date().toISOString(),
+          source: 'sales' // Indicate this came from sales page
+        })
+        console.log(`📋 Broadcasted new sale notification: ${savedSale.customerName || 'Walk-in'} - ₱${savedSale.finalAmount}`)
+      }
+      
       // Update product quantities with proper reservation handling (without transaction)
       for (const item of items) {
         // Handle both reserved and direct sales atomically
@@ -337,14 +394,14 @@ export async function POST(request: NextRequest) {
           { 
             _id: item.productId, 
             storeId: authContext.store._id,
-            totalQuantity: { $gte: item.quantity } // Ensure we have enough total stock
+            quantity: { $gte: item.quantity } // Ensure we have enough stock
           },
           [
             {
               $set: {
                 // Calculate how much reserved stock to release (min of requested quantity and current reserved)
                 reservedToRelease: { $min: ['$reservedQuantity', item.quantity] },
-                totalQuantity: { $subtract: ['$totalQuantity', item.quantity] }
+                quantity: { $subtract: ['$quantity', item.quantity] }
               }
             },
             {
@@ -360,8 +417,8 @@ export async function POST(request: NextRequest) {
         )
         
         // Double-check that we didn't go below zero
-        if (updateResult && updateResult.totalQuantity < 0) {
-          console.warn(`⚠️ Warning: Product ${updateResult.name} has negative stock: ${updateResult.totalQuantity}`)
+        if (updateResult && updateResult.quantity < 0) {
+          console.warn(`⚠️ Warning: Product ${updateResult.name} has negative stock: ${updateResult.quantity}`)
           // Note: In production, you might want to implement stock reservation or rollback
         }
       }
@@ -375,7 +432,7 @@ export async function POST(request: NextRequest) {
         const updatedProduct = await Product.findById(item.productId)
         if (updatedProduct) {
           (global as any).io.to(`store-${String(authContext.store._id)}`).emit('inventory-changed', {
-            productId: updatedProduct._id.toString(),
+            productId: String(updatedProduct._id),
             quantity: updatedProduct.quantity,
             timestamp: new Date().toISOString()
           })
@@ -386,7 +443,7 @@ export async function POST(request: NextRequest) {
     // Clear user's cart after successful sale
     try {
       await Cart.findOneAndDelete({
-        userId: authContext.user._id,
+        userId: (authContext as any).user._id,
         storeId: authContext.store._id
       })
       // console.log('✅ Cart cleared after successful sale')

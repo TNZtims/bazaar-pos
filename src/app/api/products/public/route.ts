@@ -20,9 +20,10 @@ export async function GET(request: NextRequest) {
     
     // Handle store filtering
     if (storeName) {
-      // Find store by name for public access
+      // Find the actual requested store for store-specific products and inventory
       const Store = (await import('@/models/Store')).default
       const store = await Store.findOne({ storeName: storeName, isActive: true })
+      
       if (!store) {
         return NextResponse.json(
           { message: 'Store not found or inactive' },
@@ -42,7 +43,11 @@ export async function GET(request: NextRequest) {
         })
       }
       
+      // Use the actual store's products and inventory
       query.storeId = store._id
+      
+      // Log for verification
+      console.log(`🛍️ Products API: ${storeName} → Using ${store.storeName} products (ID: ${store._id})`)
     } else {
       // Try customer authentication for authenticated requests
       const customerAuth = await authenticateCustomerRequest(request)

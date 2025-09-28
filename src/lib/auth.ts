@@ -13,6 +13,7 @@ export interface AuthPayload {
   storeName: string
   username?: string
   isAdmin: boolean
+  selectedCashier?: string
 }
 
 // Customer auth payload
@@ -31,6 +32,7 @@ export type TokenPayload = AuthPayload | CustomerAuthPayload
 
 export interface AuthContext {
   store: IStore
+  selectedCashier?: string
 }
 
 export interface CustomerAuthContext {
@@ -102,7 +104,10 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
       return null
     }
 
-    return { store: store as IStore }
+    return { 
+      store: store as IStore,
+      selectedCashier: payload.selectedCashier 
+    }
   } catch (error) {
     console.error('Authentication error:', error)
     return null

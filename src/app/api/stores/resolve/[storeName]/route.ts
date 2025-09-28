@@ -23,7 +23,7 @@ export async function GET(
     // Decode URL-encoded store name and normalize it
     const decodedStoreName = decodeURIComponent(storeName)
     
-    // Find store by name (case-insensitive)
+    // Find the actual requested store for store-specific content (products, banner, logo, name)
     const store = await Store.findOne({ 
       storeName: { $regex: new RegExp(`^${decodedStoreName}$`, 'i') },
       isActive: true 
@@ -35,6 +35,9 @@ export async function GET(
         { status: 404 }
       )
     }
+
+    // Log store resolution for verification
+    console.log(`🏪 Store resolution: ${decodedStoreName} → Using actual store ${store.storeName} (ID: ${store._id})`)
 
     // Check store status (hours, online status)
     const storeStatus = checkStoreStatus(store)

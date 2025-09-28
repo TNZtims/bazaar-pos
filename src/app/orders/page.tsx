@@ -7,6 +7,7 @@ import OrderEditModal from './OrderEditModal'
 import { useToast } from '@/contexts/ToastContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { ConfirmationModal } from '@/components/Modal'
+import { useWebSocketInventory } from '@/hooks/useWebSocketInventory'
 
 interface SaleItem {
   productName: string
@@ -50,8 +51,54 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
+  
+  // Real-time order updates via WebSocket
+  const { 
+    isConnected: isWebSocketConnected,
+    error: webSocketError
+  } = useWebSocketInventory({
+    storeId: store?.id || null,
+    enabled: !!store?.id
+  })
+  
+  // Custom WebSocket listener for order updates
+  useEffect(() => {
+    if (!store?.id || !isWebSocketConnected) return
+    
+    // Import socket.io-client dynamically
+    import('socket.io-client').then(({ io }) => {
+      const socket = io()
+      
+      // Join store-specific room
+      socket.emit('join-store', store.id)
+      
+      // Listen for new orders
+      socket.on('order-created', (data: any) => {
+        console.log('📋 Orders Page: New order received via WebSocket:', data)
+        
+        // Show notification
+        success(
+          `New order from ${data.customerName}: ₱${data.totalAmount.toFixed(2)} (${data.itemCount} items)`,
+          'New Order Received!'
+        )
+        
+        // Refresh orders list
+        fetchOrders()
+      })
+      
+      return () => {
+        socket.disconnect()
+      }
+    })
+  }, [store?.id, isWebSocketConnected, success])
+  
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  
+  // Debug: Monitor deleting state changes
+  useEffect(() => {
+    console.log('🔄 Deleting state changed:', deleting)
+  }, [deleting])
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -83,12 +130,22 @@ export default function OrdersPage() {
     amount: 0,
     method: 'cash' as 'cash' | 'card' | 'digital',
     notes: '',
-    cashier: ''
+    cashier: store?.selectedCashier || ''
   })
 
   useEffect(() => {
     fetchOrders()
   }, [filterStatus, searchTerm, dateFrom, dateTo, sortBy, sortOrder])
+
+  // Update payment data when store/cashier changes
+  useEffect(() => {
+    if (store?.selectedCashier) {
+      setPaymentData(prev => ({
+        ...prev,
+        cashier: store.selectedCashier || ''
+      }))
+    }
+  }, [store?.selectedCashier])
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -165,8 +222,10 @@ export default function OrdersPage() {
   const handleAddPayment = async () => {
     if (!selectedOrder || paymentData.amount <= 0 || paymentLoading) return
 
-    if (!paymentData.cashier.trim()) {
-      error('Please select a cashier for this payment', 'Cashier Required')
+    // Ensure cashier is set from logged-in user
+    const cashierName = store?.selectedCashier || paymentData.cashier
+    if (!cashierName.trim()) {
+      error('Cashier information is missing. Please log in again.', 'Authentication Error')
       return
     }
 
@@ -177,7 +236,8 @@ export default function OrdersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'add_payment',
-          ...paymentData
+          ...paymentData,
+          cashier: cashierName
         })
       })
 
@@ -185,7 +245,7 @@ export default function OrdersPage() {
         success('Payment added successfully!', 'Payment Added')
         setPaymentModal(false)
         setSelectedOrder(null)
-        setPaymentData({ amount: 0, method: 'cash', notes: '', cashier: '' })
+        setPaymentData({ amount: 0, method: 'cash', notes: '', cashier: store?.selectedCashier || '' })
         fetchOrders()
       } else {
         const errorData = await response.json()
@@ -237,19 +297,45 @@ export default function OrdersPage() {
     const order = orders.find(o => o._id === orderId)
     if (!order) return
 
+    // Prevent multiple clicks
+    if (deleting === orderId) return
+
+    // Calculate total items to be returned to stock
+    const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0)
+    const itemsList = order.items.map(item => `• ${item.productName} (${item.quantity} units)`).join('\n')
+
     showConfirmation(
       'Delete Order',
-      `Are you sure you want to permanently delete this order?\n\nOrder #${order._id.slice(-6)}\nCustomer: ${order.customerName || 'Walk-in Customer'}\nTotal: ${formatCurrency(order.finalAmount)}\n\nThis action cannot be undone. Reserved stock will be released.`,
+      `Are you sure you want to permanently delete this order?
+
+📋 Order Details:
+• Order ID: #${order._id.slice(-6)}
+• Customer: ${order.customerName || 'Walk-in Customer'}
+• Total Amount: ${formatCurrency(order.finalAmount)}
+• Status: ${order.paymentStatus}
+
+📦 Items to be returned to stock (${totalItems} total):
+${itemsList}
+
+⚠️ This action cannot be undone. All reserved quantities will be released back to available stock.`,
       async () => {
+        // Close confirmation modal first
+        closeConfirmation()
+        
+        // Set loading state
         setDeleting(orderId)
+        console.log('🔄 Setting delete loading state for order:', orderId)
+        
         try {
           const response = await fetch(`/api/sales/${orderId}`, {
             method: 'DELETE'
           })
 
           if (response.ok) {
-            closeConfirmation()
-            success('Order deleted successfully!', 'Order Deleted')
+            success(
+              `Order deleted successfully! ${totalItems} items returned to stock.`, 
+              'Order Deleted'
+            )
             fetchOrders()
           } else {
             const errorData = await response.json()
@@ -259,6 +345,7 @@ export default function OrdersPage() {
           console.error('Error deleting order:', err)
           error('Error deleting order', 'Delete Failed')
         } finally {
+          console.log('✅ Clearing delete loading state for order:', orderId)
           setDeleting(null)
         }
       },
@@ -627,17 +714,33 @@ export default function OrdersPage() {
                                 Cancel
                               </button>
                             )}
-                            {(order.paymentStatus === 'pending' || order.status === 'pending') && order.paymentStatus !== 'partial' && (
+                            {(order.paymentStatus === 'pending' || order.status === 'active') && order.paymentStatus !== 'partial' && (
                               <button
                                 onClick={() => handleDeleteOrder(order._id)}
                                 disabled={deleting === order._id}
-                                className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/20 hover:bg-gray-100 dark:hover:bg-gray-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                title="Delete Order"
+                                className={`inline-flex items-center px-3 py-1.5 border text-xs font-medium rounded-md transition-colors ${
+                                  deleting === order._id 
+                                    ? 'border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 cursor-not-allowed' 
+                                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/20 hover:bg-gray-100 dark:hover:bg-gray-900/40 disabled:opacity-50 disabled:cursor-not-allowed'
+                                }`}
+                                title={deleting === order._id ? "Processing deletion..." : "Delete Order"}
                               >
-                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                Delete
+                                {deleting === order._id ? (
+                                  <>
+                                    <svg className="animate-spin w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Processing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Delete
+                                  </>
+                                )}
                               </button>
                             )}
                           </div>
@@ -718,16 +821,32 @@ export default function OrdersPage() {
                           Edit
                         </button>
                       )}
-                      {(order.paymentStatus === 'pending' || order.status === 'pending') && order.paymentStatus !== 'partial' && (
+                      {(order.paymentStatus === 'pending' || order.status === 'active') && order.paymentStatus !== 'partial' && (
                         <button
                           onClick={() => handleDeleteOrder(order._id)}
                           disabled={deleting === order._id}
-                          className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/20 hover:bg-gray-100 dark:hover:bg-gray-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className={`inline-flex items-center px-2.5 py-1.5 border text-xs font-medium rounded transition-colors ${
+                            deleting === order._id 
+                              ? 'border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 cursor-not-allowed' 
+                              : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/20 hover:bg-gray-100 dark:hover:bg-gray-900/40 disabled:opacity-50 disabled:cursor-not-allowed'
+                          }`}
                         >
-                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          Delete
+                          {deleting === order._id ? (
+                            <>
+                              <svg className="animate-spin w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              Delete
+                            </>
+                          )}
                         </button>
                       )}
                     </div>
@@ -1038,21 +1157,17 @@ export default function OrdersPage() {
                   {selectedOrder.amountDue > 0 && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                        Cashier *
+                        Cashier
                       </label>
-                      <select
-                        value={paymentData.cashier}
-                        onChange={(e) => setPaymentData({ ...paymentData, cashier: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                        required
-                      >
-                        <option value="">Select Cashier</option>
-                        {store?.cashiers?.map((cashier) => (
-                          <option key={cashier} value={cashier}>
-                            {cashier}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-gray-50 dark:bg-slate-600 text-gray-900 dark:text-slate-100">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                          <span className="font-medium">{store?.selectedCashier || 'Unknown Cashier'}</span>
+                          <span className="text-xs text-gray-500 dark:text-slate-400">(Logged in)</span>
+                        </div>
+                      </div>
                     </div>
                   )}
 

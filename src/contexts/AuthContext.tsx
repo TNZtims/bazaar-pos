@@ -7,11 +7,12 @@ interface Store {
   storeName: string
   isAdmin: boolean
   cashiers: string[]
+  selectedCashier?: string
 }
 
 interface AuthContextType {
   store: Store | null
-  login: (storeName: string, password: string) => Promise<{ success: boolean; message: string }>
+  login: (storeName: string, password: string, selectedCashier?: string) => Promise<{ success: boolean; message: string }>
   logout: () => Promise<void>
   loading: boolean
   isAuthenticated: boolean
@@ -42,6 +43,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, [])
 
   const checkAuth = async () => {
+    // Use localStorage to track if we've already determined user is not logged in
+    const wasLoggedOut = localStorage.getItem('auth-status') === 'logged-out'
+    
+    if (wasLoggedOut) {
+      setStore(null)
+      setLoading(false)
+      return
+    }
+
     try {
       const response = await fetch('/api/auth/me', {
         credentials: 'include'
@@ -50,22 +60,32 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (response.ok) {
         const data = await response.json()
         setStore(data.store)
+        localStorage.setItem('auth-status', 'logged-in')
+      } else if (response.status === 401) {
+        // User is not authenticated
+        setStore(null)
+        localStorage.setItem('auth-status', 'logged-out')
+      } else {
+        // Other error
+        setStore(null)
+        localStorage.removeItem('auth-status')
       }
     } catch (error) {
-      console.error('Auth check failed:', error)
+      setStore(null)
+      localStorage.removeItem('auth-status')
     } finally {
       setLoading(false)
     }
   }
 
-  const login = async (storeName: string, password: string) => {
+  const login = async (storeName: string, password: string, selectedCashier?: string) => {
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ storeName, password }),
+        body: JSON.stringify({ storeName, password, selectedCashier }),
         credentials: 'include'
       })
 
@@ -73,8 +93,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       if (response.ok) {
         setStore(data.store)
+        localStorage.setItem('auth-status', 'logged-in')
         return { success: true, message: data.message }
       } else {
+        localStorage.setItem('auth-status', 'logged-out')
         return { success: false, message: data.message }
       }
     } catch (error) {
@@ -93,6 +115,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       console.error('Logout error:', error)
     } finally {
       setStore(null)
+      localStorage.setItem('auth-status', 'logged-out')
     }
   }
 

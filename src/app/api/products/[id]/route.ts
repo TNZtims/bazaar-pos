@@ -53,6 +53,16 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Products management page should ONLY use admin authentication
+    const authContext = await authenticateRequest(request)
+    
+    if (!authContext) {
+      return NextResponse.json(
+        { message: 'Admin authentication required for product management' },
+        { status: 401 }
+      )
+    }
+    
     await connectToDatabase()
     
     const body = await request.json()
@@ -113,6 +123,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Products management page should ONLY use admin authentication
+    const authContext = await authenticateRequest(request)
+    
+    if (!authContext) {
+      return NextResponse.json(
+        { message: 'Admin authentication required for product management' },
+        { status: 401 }
+      )
+    }
+    
     await connectToDatabase()
     
     const { id } = await params

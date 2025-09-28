@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectToDatabase from '@/lib/mongodb'
 import Sale from '@/models/Sale'
 import Product from '@/models/Product'
+import { authenticateRequest } from '@/lib/auth'
 
 // GET /api/sales/[id] - Get sale by ID
 export async function GET(
@@ -36,6 +37,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authContext = await authenticateRequest(request)
+    
+    if (!authContext) {
+      return NextResponse.json(
+        { message: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+    
     await connectToDatabase()
     
     const body = await request.json()
@@ -50,10 +60,10 @@ export async function PUT(
       )
     }
 
-    // console.log(`🔄 Updating sale ${id} with action: ${action}`)
+    console.log(`🔄 Updating sale ${id} with action: ${action}`)
     
     if (action === 'add_payment') {
-      return await handleAddPayment(sale, updateData)
+      return await handleAddPayment(sale, updateData, authContext)
     } else if (action === 'update_items') {
       return await handleUpdateItems(sale, updateData)
     } else if (action === 'update_order_details') {
@@ -76,8 +86,11 @@ export async function PUT(
 }
 
 // Handle adding payment to existing sale
-async function handleAddPayment(sale: any, paymentData: any) {
+async function handleAddPayment(sale: any, paymentData: any, authContext: any) {
   const { amount, method, notes, cashier } = paymentData
+  const finalCashier = cashier || authContext.selectedCashier
+  
+  console.log(`💳 Adding payment to sale ${sale._id}:`, { amount, method, notes, cashier, finalCashier })
   
   if (!amount || amount <= 0) {
     return NextResponse.json(
@@ -99,7 +112,7 @@ async function handleAddPayment(sale: any, paymentData: any) {
     method,
     date: new Date(),
     notes,
-    cashier
+    cashier: finalCashier
   })
   
   // Update payment status
@@ -107,8 +120,8 @@ async function handleAddPayment(sale: any, paymentData: any) {
   sale.amountDue -= amount
   
   // Update cashier field if provided
-  if (cashier) {
-    sale.cashier = cashier
+  if (finalCashier) {
+    sale.cashier = finalCashier
   }
   
   if (sale.amountDue <= 0) {
@@ -529,6 +542,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authContext = await authenticateRequest(request)
+    
+    if (!authContext) {
+      return NextResponse.json(
+        { message: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+    
     await connectToDatabase()
     
     const { id } = await params
@@ -549,39 +571,47 @@ export async function DELETE(
       )
     }
     
+    console.log(`🗑️ Deleting order ${id} and restoring stock for ${sale.items.length} items`)
+    
     // Restore product quantities (both total and reserved)
     const updatedProducts = []
     for (const item of sale.items) {
       const product = await Product.findById(item.product)
       if (product) {
-        // Add back to total quantity and reduce reserved quantity
+        console.log(`📦 Restoring ${item.quantity} units of ${product.name} (ID: ${item.product})`)
+        
+        // Add back to quantity (the actual database field)
         const updatedProduct = await Product.findByIdAndUpdate(
           item.product,
           { 
             $inc: { 
-              totalQuantity: item.quantity,
-              reservedQuantity: -item.quantity 
+              quantity: item.quantity  // Restore to the main quantity field
             }
           },
           { new: true }
         )
         if (updatedProduct) {
           updatedProducts.push(updatedProduct)
+          console.log(`✅ Stock restored for ${product.name}: New Quantity=${updatedProduct.quantity}`)
         }
+      } else {
+        console.warn(`⚠️ Product ${item.product} not found during stock restoration`)
       }
     }
     
     // Broadcast inventory updates via WebSocket
-    if (global.io && updatedProducts.length > 0) {
+    if ((global as any).io && updatedProducts.length > 0) {
+      console.log('🔊 Broadcasting stock restoration via WebSocket for', updatedProducts.length, 'products')
       for (const product of updatedProducts) {
-        global.io.to(`store-${String(product.storeId)}`).emit('inventory-changed', {
-          productId: product._id,
-          totalQuantity: product.totalQuantity,
-          availableQuantity: product.availableQuantity,
-          reservedQuantity: product.reservedQuantity,
+        (global as any).io.to(`store-${String(product.storeId)}`).emit('inventory-changed', {
+          productId: String(product._id),
+          quantity: product.quantity, // Use the actual database quantity field
           timestamp: new Date().toISOString()
         })
+        console.log(`📡 Broadcasted stock update for ${product.name}: Quantity=${product.quantity}`)
       }
+    } else {
+      console.log('❌ WebSocket not available or no products to broadcast')
     }
     
     await Sale.findByIdAndDelete(id)

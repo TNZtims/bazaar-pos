@@ -19,7 +19,10 @@ export async function POST(request: NextRequest) {
     await connectToDatabase()
     
     const body = await request.json()
-    const { orderId, action, cashier, paymentStatus, paymentMethod, amountPaid, notes } = body
+    const { orderId, action, paymentStatus, paymentMethod, amountPaid, notes } = body
+    
+    // Use cashier from authentication context
+    const cashier = authContext.selectedCashier
     
     // Validation
     if (!orderId || !action || !['approve', 'reject'].includes(action)) {

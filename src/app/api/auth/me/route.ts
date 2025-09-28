@@ -12,14 +12,15 @@ export async function GET(request: NextRequest) {
       )
     }
     
-    const { store } = authContext
+    const { store, selectedCashier } = authContext
     
     return NextResponse.json({
       store: {
         id: store._id,
         storeName: store.storeName,
         isAdmin: store.isAdmin,
-        cashiers: store.cashiers
+        cashiers: store.cashiers,
+        selectedCashier: selectedCashier
       }
     })
   } catch (error: unknown) {

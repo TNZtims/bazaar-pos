@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      if (product.storeId.toString() !== customerAuth.store._id.toString()) {
+      if (product.storeId.toString() !== String(customerAuth.store._id)) {
         return NextResponse.json(
           { message: 'Product not available in this store' },
           { status: 400 }
@@ -142,6 +142,20 @@ export async function POST(request: NextRequest) {
     
     const savedOrder = await order.save()
     
+    // Broadcast new order notification via WebSocket
+    if ((global as any).io) {
+      (global as any).io.to(`store-${String(customerAuth.store._id)}`).emit('order-created', {
+        orderId: String(savedOrder._id),
+        customerName: savedOrder.customerName,
+        totalAmount: savedOrder.totalAmount,
+        itemCount: savedOrder.items.length,
+        status: savedOrder.status,
+        approvalStatus: savedOrder.approvalStatus,
+        timestamp: new Date().toISOString()
+      })
+      console.log(`📋 Broadcasted new order notification: ${savedOrder.customerName} - ₱${savedOrder.totalAmount}`)
+    }
+    
     // Since cart items were already reserved (quantity reduced), 
     // placing order doesn't need to reduce quantity again.
     // The quantity was already decremented when items were added to cart via reserve API
@@ -153,7 +167,7 @@ export async function POST(request: NextRequest) {
         const updatedProduct = await Product.findById(item.product)
         if (updatedProduct) {
           (global as any).io.to(`store-${String(customerAuth.store._id)}`).emit('inventory-changed', {
-            productId: updatedProduct._id.toString(),
+            productId: String(updatedProduct._id),
             quantity: updatedProduct.quantity,
             timestamp: new Date().toISOString()
           })
@@ -254,13 +268,17 @@ export async function DELETE(request: NextRequest) {
     
     // Broadcast inventory updates via WebSocket
     if ((global as any).io && updatedProducts.length > 0) {
+      console.log('🔊 Broadcasting stock restoration via WebSocket for', updatedProducts.length, 'products')
       for (const product of updatedProducts) {
-        (global as any).io.to(`store-${customerAuth.store._id}`).emit('inventory-changed', {
-          productId: product._id.toString(),
+        (global as any).io.to(`store-${String(customerAuth.store._id)}`).emit('inventory-changed', {
+          productId: String(product._id),
           quantity: product.quantity,
           timestamp: new Date().toISOString()
         })
+        console.log(`📡 Broadcasted stock update for ${product.name}: Quantity=${product.quantity}`)
       }
+    } else {
+      console.log('❌ WebSocket not available or no products to broadcast')
     }
     
     await Sale.findByIdAndDelete(orderId)

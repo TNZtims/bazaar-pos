@@ -7,12 +7,19 @@ export async function POST(request: NextRequest) {
   try {
     await connectToDatabase()
     
-    const { storeName, password } = await request.json()
+    const { storeName, password, selectedCashier } = await request.json()
     
     // Validation
     if (!storeName || !password) {
       return NextResponse.json(
         { message: 'Store name and password are required' },
+        { status: 400 }
+      )
+    }
+
+    if (selectedCashier && typeof selectedCashier !== 'string') {
+      return NextResponse.json(
+        { message: 'Invalid cashier selection' },
         { status: 400 }
       )
     }
@@ -36,12 +43,21 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    // Validate cashier if provided
+    if (selectedCashier && !store.cashiers?.includes(selectedCashier)) {
+      return NextResponse.json(
+        { message: 'Invalid cashier selection' },
+        { status: 400 }
+      )
+    }
     
     // Generate token
     const token = generateToken({
       storeId: String(store._id),
       storeName: store.storeName,
-      isAdmin: store.isAdmin
+      isAdmin: store.isAdmin,
+      selectedCashier: selectedCashier
     })
     
     // Create response
@@ -51,7 +67,8 @@ export async function POST(request: NextRequest) {
         id: store._id,
         storeName: store.storeName,
         isAdmin: store.isAdmin,
-        cashiers: store.cashiers
+        cashiers: store.cashiers,
+        selectedCashier: selectedCashier
       }
     })
     

@@ -21,6 +21,7 @@ interface Product {
   category?: string
   description?: string
   imageUrl?: string
+  lastUpdated?: string // For forcing React re-renders
 }
 
 interface CartItem {
@@ -35,12 +36,16 @@ export default function SalesPage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
+  const [updatedProductIds, setUpdatedProductIds] = useState<Set<string>>(new Set())
+  const [newProductIds, setNewProductIds] = useState<Set<string>>(new Set())
+  const [newProductsToNotify, setNewProductsToNotify] = useState<any[]>([])
+  const [notifiedProductIds, setNotifiedProductIds] = useState<Set<string>>(new Set())
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalProducts, setTotalProducts] = useState(0)
   const [productsPerPage] = useState(20) // 4 rows × 5 columns = 20 products per page
   const [processing, setProcessing] = useState(false)
-  const [selectedCashier, setSelectedCashier] = useState('')
+  const [selectedCashier, setSelectedCashier] = useState(store?.selectedCashier || '')
   const [cartModalOpen, setCartModalOpen] = useState(false)
   const [addingToCart, setAddingToCart] = useState<string | null>(null)
   const [selectedQuantities, setSelectedQuantities] = useState<{[productId: string]: number}>({})
@@ -66,6 +71,21 @@ export default function SalesPage() {
     onConfirm: () => {},
     onCancel: () => {}
   })
+  const [selectedImageProduct, setSelectedImageProduct] = useState<Product | null>(null)
+
+  // Close image modal on Escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedImageProduct) {
+        setSelectedImageProduct(null)
+      }
+    }
+
+    if (selectedImageProduct) {
+      document.addEventListener('keydown', handleEscape)
+      return () => document.removeEventListener('keydown', handleEscape)
+    }
+  }, [selectedImageProduct])
   
   // Real-time inventory updates via WebSocket
   const { 
@@ -80,8 +100,41 @@ export default function SalesPage() {
     enabled: !!store?.id
   })
 
-  // State to track reserved quantities from other cashiers
-  const [otherCashiersReservations, setOtherCashiersReservations] = useState<{[productId: string]: number}>({})
+  // Debug WebSocket connection status
+  useEffect(() => {
+    console.log('🔗 Sales Page WebSocket Status:', {
+      connected: isWebSocketConnected,
+      storeId: store?.id,
+      error: webSocketError,
+      updatesCount: inventoryUpdates.length
+    })
+  }, [isWebSocketConnected, store?.id, webSocketError, inventoryUpdates.length])
+  
+  // Handle new product notifications separately to avoid render cycle issues
+  useEffect(() => {
+    if (newProductsToNotify.length > 0) {
+      console.log('🔔 Sales Page: Showing notification for new products:', newProductsToNotify.map(p => p.name))
+      
+      // Use setTimeout to ensure this runs in the next tick to avoid any timing issues
+      const timeoutId = setTimeout(() => {
+        success(
+          `${newProductsToNotify.length} new product${newProductsToNotify.length > 1 ? 's' : ''} added: ${newProductsToNotify.map(p => p.name).join(', ')}`,
+          'New Products Available!'
+        )
+      }, 0)
+      
+      setNewProductsToNotify([]) // Clear immediately after scheduling notification
+      
+      return () => clearTimeout(timeoutId)
+    }
+  }, [newProductsToNotify]) // Removed 'success' from dependencies
+
+  // Auto-populate cashier from login session
+  useEffect(() => {
+    if (store?.selectedCashier && !selectedCashier) {
+      setSelectedCashier(store.selectedCashier)
+    }
+  }, [store?.selectedCashier, selectedCashier])
 
   // Handle cart updates from other cashiers
   useEffect(() => {
@@ -98,14 +151,6 @@ export default function SalesPage() {
         }
       })
       
-      setOtherCashiersReservations(prev => {
-        const updated = {
-          ...prev,
-          ...newReservations
-        }
-        console.log('Updated other cashiers reservations:', updated)
-        return updated
-      })
       
       // Show notification for significant cart changes
       const latestUpdate = cartUpdates[cartUpdates.length - 1]
@@ -160,19 +205,47 @@ export default function SalesPage() {
 
   useEffect(() => {
     setCurrentPage(1) // Reset to first page when search changes
-    fetchProducts()
-  }, [searchTerm])
+    if (store?.id) {
+      fetchProducts()
+    }
+  }, [searchTerm]) // Only depend on searchTerm, store changes are handled in main effect
 
   useEffect(() => {
-    fetchProducts()
-  }, [currentPage]) // Fetch products when page changes
+    if (store?.id) {
+      fetchProducts()
+    }
+  }, [currentPage]) // Only depend on currentPage, store changes are handled in main effect
 
   // Cart API functions
   const loadCartFromAPI = async () => {
+    // Capture the current store ID at the time of the request
+    const requestStoreId = store?.id
+    const requestStoreName = store?.storeName
+    
+    if (!requestStoreId) {
+      console.log('⚠️ No store ID available, skipping cart load')
+      return
+    }
+    
     try {
-      const response = await fetch('/api/cart', {
-        credentials: 'include'
+      // Add cache-busting to ensure fresh cart data from MongoDB
+      const timestamp = Date.now()
+      console.log(`🛒 Sales Page: Loading cart for store ${requestStoreName} (${requestStoreId})`)
+      
+      const response = await fetch(`/api/cart?_t=${timestamp}`, {
+        credentials: 'include',
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
       })
+      
+      // Check if store changed while loading cart
+      if (store?.id !== requestStoreId) {
+        console.log(`🚫 Sales Page: Cart load cancelled - store changed from ${requestStoreName} to ${store?.storeName}`)
+        return
+      }
       
       if (response.ok) {
         const cartData = await response.json()
@@ -189,7 +262,7 @@ export default function SalesPage() {
         // Only restore cart if it has items and wasn't intentionally cleared
         if (cartItems.length > 0 && !wasCartCleared) {
           setCart(cartItems)
-          console.log(`📦 Restored ${cartItems.length} items from database`)
+          console.log(`✅ Sales Page: Restored ${cartItems.length} items from database for store ${requestStoreName}`)
         } else {
           // Cart is empty or was intentionally cleared, don't restore
           setCart([])
@@ -218,7 +291,12 @@ export default function SalesPage() {
         setSelectedCashier(cartData.selectedCashier || '')
       }
     } catch (error) {
-      console.error('Failed to load cart from API:', error)
+      // Only log error if we're still on the same store
+      if (store?.id === requestStoreId) {
+        console.error('Failed to load cart from API:', error)
+      } else {
+        console.log(`🚫 Sales Page: Ignoring cart load error for old request (${requestStoreId})`)
+      }
     }
   }
 
@@ -371,12 +449,13 @@ export default function SalesPage() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (cart.length === 0 || isNavigationBlocked) return
 
-      // Detect refresh shortcuts: F5, Ctrl+R, Ctrl+Shift+R, Cmd+R
+      // Detect refresh shortcuts: F5, Ctrl+R, Ctrl+Shift+R, Cmd+R, Ctrl+F5
       const isRefresh = 
         event.key === 'F5' ||
         (event.ctrlKey && event.key === 'r') ||
         (event.ctrlKey && event.shiftKey && event.key === 'R') ||
-        (event.metaKey && event.key === 'r')
+        (event.metaKey && event.key === 'r') ||
+        (event.ctrlKey && event.key === 'F5') // Hard refresh
 
       if (isRefresh) {
         event.preventDefault()
@@ -531,28 +610,134 @@ export default function SalesPage() {
     setConfirmModal(prev => ({ ...prev, isOpen: false }))
   }
 
-  // Load products on component mount
+  // Load products on component mount and when store changes
   useEffect(() => {
-    fetchProducts()
-  }, [])
+    if (store?.id) {
+      console.log(`🏪 Sales Page: Store changed to:`, store.id, store.storeName, 'at', new Date().toISOString())
+      
+      // Reset ALL state when store changes to prevent cross-store contamination
+      setProducts([])
+      setCart([])
+      setSelectedQuantities({})
+      setSearchTerm('')
+      setCurrentPage(1)
+      setCartLoaded(false)
+      setAddingToCart(null) // Reset any ongoing operations
+      setProcessing(false) // Reset processing state
+      
+      // Add a small delay to ensure state is fully reset before fetching new data
+      setTimeout(() => {
+        // Fetch products for the new store
+        fetchProducts()
+        
+        // Load cart for the new store
+        loadCartFromAPI().finally(() => {
+          setCartLoaded(true)
+        })
+      }, 100)
+    }
+  }, [store?.id])
 
   // Apply real-time inventory updates to products
   useEffect(() => {
+    console.log('🔍 Sales Page: inventoryUpdates changed:', inventoryUpdates.length, inventoryUpdates)
     if (inventoryUpdates.length > 0) {
-      setProducts(prevProducts => 
-        prevProducts.map(product => {
-          const update = inventoryUpdates.find(u => u.productId === product._id)
-          if (update) {
+      console.log(`📡 Sales Page: Applying ${inventoryUpdates.length} inventory updates for store:`, store?.id)
+      
+      // Track which products are being updated for animation
+      const updatedIds = new Set<string>()
+      const newIds = new Set<string>()
+      
+      // Handle new product creation first
+      const newProducts = inventoryUpdates.filter(u => u.isNewProduct && u.productData)
+      let productsToNotify: any[] = []
+      
+      if (newProducts.length > 0) {
+        console.log('📦 Sales Page: Adding new products:', newProducts.map(p => p.productData.name))
+        
+        setProducts(prevProducts => {
+          const existingIds = new Set(prevProducts.map(p => p._id))
+          const productsToAdd = newProducts
+            .filter(update => !existingIds.has(update.productData._id))
+            .map(update => {
+              newIds.add(update.productData._id)
+              console.log('➕ Sales Page: Adding new product:', update.productData.name)
             return {
+                ...update.productData,
+                lastUpdated: update.timestamp
+              }
+            })
+          
+          if (productsToAdd.length > 0) {
+            productsToNotify = productsToAdd // Store for notification outside state update
+            return [...prevProducts, ...productsToAdd]
+          }
+          return prevProducts
+        })
+        
+        // Set products to notify via separate state to trigger useEffect
+        if (productsToNotify.length > 0) {
+          // Filter out products that have already been notified
+          const productsToNotifyFiltered = productsToNotify.filter(p => !notifiedProductIds.has(p._id))
+          
+          if (productsToNotifyFiltered.length > 0) {
+            console.log('🔔 Sales Page: Setting products to notify:', productsToNotifyFiltered.map(p => p.name))
+            setNewProductsToNotify(productsToNotifyFiltered)
+            
+            // Mark these products as notified
+            setNotifiedProductIds(prev => {
+              const newSet = new Set(prev)
+              productsToNotifyFiltered.forEach(p => newSet.add(p._id))
+              return newSet
+            })
+          }
+        }
+      }
+      
+      // Handle regular inventory updates
+      setProducts(prevProducts => {
+        const updatedProducts = prevProducts.map(product => {
+          const update = inventoryUpdates.find(u => u.productId === product._id && !u.isNewProduct)
+          if (update) {
+            console.log(`📦 Sales Page: Updating ${product.name}:`)
+            console.log(`  - quantity: ${product.quantity} → ${update.quantity}`)
+            console.log(`  - totalQuantity: ${product.totalQuantity} → ${update.quantity}`)
+            console.log(`  - availableQuantity: ${product.availableQuantity} → ${update.quantity}`)
+            updatedIds.add(product._id)
+            
+            const updatedProduct = {
               ...product,
-              quantity: update.quantity ?? product.quantity
+              quantity: update.quantity ?? product.quantity,
+              totalQuantity: update.quantity ?? product.totalQuantity, // Update totalQuantity too
+              availableQuantity: update.quantity ?? product.availableQuantity, // Update availableQuantity
+              // Force re-render by adding timestamp
+              lastUpdated: new Date().toISOString()
             }
+            
+            console.log(`  - Updated product:`, updatedProduct)
+            return updatedProduct
           }
           return product
         })
-      )
+        
+        console.log('✅ Sales Page: Forcing UI re-render with updated products')
+        return [...updatedProducts] // Force new array reference
+      })
+      
+      // Set animation IDs
+      setUpdatedProductIds(updatedIds)
+      setNewProductIds(newIds)
+      
+      // Clear animations after timeout
+      setTimeout(() => {
+        setUpdatedProductIds(new Set())
+      }, 2000)
+      
+      setTimeout(() => {
+        setNewProductIds(new Set())
+      }, 3000)
     }
-  }, [inventoryUpdates])
+  }, [inventoryUpdates, store?.id, success])
 
   // Handle product deletions - remove from products and cart
   useEffect(() => {
@@ -585,6 +770,15 @@ export default function SalesPage() {
   }
 
   const fetchProducts = async () => {
+    // Capture the current store ID at the time of the request
+    const requestStoreId = store?.id
+    const requestStoreName = store?.storeName
+    
+    if (!requestStoreId) {
+      console.log('⚠️ No store ID available, skipping product fetch')
+      return
+    }
+    
     try {
       setLoading(true)
       const params = new URLSearchParams()
@@ -593,15 +787,58 @@ export default function SalesPage() {
       params.append('limit', productsPerPage.toString())
       params.append('includeCart', 'true') // Include cart data for accurate availability
       
-      const response = await fetch(`/api/products?${params}`)
+      // Add cache-busting timestamp to force fresh data from MongoDB
+      params.append('_t', Date.now().toString())
+      
+      console.log(`🚀 Sales Page: Starting product fetch for store ${requestStoreName} (${requestStoreId})`)
+      
+      const response = await fetch(`/api/products?${params}`, {
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      })
       const data = await response.json()
+      
+      // CRITICAL: Check if store has changed while we were fetching
+      if (store?.id !== requestStoreId) {
+        console.log(`🚫 Sales Page: RACE CONDITION DETECTED! Request was for ${requestStoreName} (${requestStoreId}) but current store is ${store?.storeName} (${store?.id}). Discarding response.`)
+        return // Discard this response
+      }
+      
+      // Validate that products belong to the current store
+      if (data.products?.length > 0) {
+        const invalidProducts = data.products.filter((p: any) => p.storeId !== requestStoreId)
+        if (invalidProducts.length > 0) {
+          console.error(`❌ Sales Page: INVALID PRODUCTS DETECTED! ${invalidProducts.length} products don't belong to store ${requestStoreId}:`, invalidProducts.map((p: any) => ({ id: p._id, name: p.name, storeId: p.storeId })))
+          return // Don't set invalid products
+        }
+      }
+      
+      // Log to verify fresh data is being fetched
+      console.log(`✅ Sales Page: Successfully fetched ${data.products?.length || 0} products for store ${requestStoreName} (${requestStoreId})`)
+      
+      // Log first few product IDs to verify they belong to the correct store
+      if (data.products?.length > 0) {
+        console.log(`📦 Sample products:`, data.products.slice(0, 3).map((p: any) => ({ id: p._id, name: p.name, storeId: p.storeId })))
+      }
+      
       setProducts(data.products || [])
       setTotalPages(data.totalPages || 1)
       setTotalProducts(data.total || 0)
     } catch (error) {
-      console.error('Error fetching products:', error)
+      // Only log error if we're still on the same store
+      if (store?.id === requestStoreId) {
+        console.error('Error fetching products:', error)
+      } else {
+        console.log(`🚫 Sales Page: Ignoring error for old request (${requestStoreId}), current store is ${store?.id}`)
+      }
     } finally {
-      setLoading(false)
+      // Only update loading state if we're still on the same store
+      if (store?.id === requestStoreId) {
+        setLoading(false)
+      }
     }
   }
 
@@ -758,18 +995,16 @@ export default function SalesPage() {
   }
 
   const getActualAvailableQuantity = (product: Product) => {
-    // Calculate based on local cart state and other cashiers' reservations
+    // Calculate based on local cart state only (removed other cashiers' reservations to fix double-counting)
     const cartItem = cart.find(item => item.product._id === product._id)
     const localCartQuantity = cartItem ? cartItem.quantity : 0
     
-    // Get reservations from other cashiers
-    const otherCashiersQuantity = otherCashiersReservations[product._id] || 0
-    
-    // Use the base quantity from the product and subtract all reservations
+    // Use the base quantity from the product and subtract only local cart reservations
     const baseQuantity = product.totalQuantity || product.quantity || 0
-    const totalReserved = localCartQuantity + otherCashiersQuantity
+    const result = Math.max(0, baseQuantity - localCartQuantity)
     
-    return Math.max(0, baseQuantity - totalReserved)
+    
+    return result
   }
 
   const calculateTotals = () => {
@@ -791,10 +1026,6 @@ export default function SalesPage() {
       return
     }
 
-    if (!selectedCashier.trim()) {
-      error('Please select a cashier for this sale')
-      return
-    }
 
     if (saleData.paymentStatus === 'partial') {
       if (saleData.amountPaid <= 0) {
@@ -846,8 +1077,7 @@ export default function SalesPage() {
         customerName: saleData.customerName,
         customerPhone: saleData.customerPhone,
         customerEmail: saleData.customerEmail,
-        notes: saleData.notes,
-        cashier: selectedCashier
+        notes: saleData.notes
       }
 
       const response = await fetch('/api/sales', {
@@ -1005,7 +1235,7 @@ export default function SalesPage() {
                 <span className={`text-sm font-medium ${
                   isWebSocketConnected ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                 }`}>
-                  {isWebSocketConnected ? 'Live' : 'Offline'}
+                  {isWebSocketConnected ? `Live (${inventoryUpdates.length} updates)` : 'Offline'}
                 </span>
               </div>
               
@@ -1045,130 +1275,129 @@ export default function SalesPage() {
             </div>
           ) : (
             <>
-              {/* Products Grid - 4 columns */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-8">
-              {products.map((product) => (
+              {/* Products Grid - Modern Dark Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 p-8">
+              {products.map((product) => {
+                const isOutOfStock = getActualAvailableQuantity(product) === 0
+                
+                return (
                 <div
-                  key={product._id}
-                  className="group relative bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-lg border border-gray-100 dark:border-slate-700 overflow-hidden transition-all duration-300 hover:-translate-y-1"
+                  key={`${product._id}-${product.lastUpdated || Date.now()}`}
+                  className={`relative transition-all duration-300 ease-in-out ${
+                    isOutOfStock
+                      ? 'bg-slate-800/50 opacity-60 cursor-not-allowed shadow-[0_1px_3px_0_rgba(0,0,0,0.3),0_1px_2px_0_rgba(0,0,0,0.2)]'
+                      : 'bg-slate-800 cursor-pointer shadow-[0_1px_3px_0_rgba(0,0,0,0.3),0_1px_2px_0_rgba(0,0,0,0.2)] hover:shadow-[0_10px_15px_-3px_rgba(0,0,0,0.4),0_4px_6px_-2px_rgba(0,0,0,0.25)] hover:-translate-y-1'
+                  } ${
+                    newProductIds.has(product._id)
+                      ? 'animate-bounce scale-[1.05] ring-4 ring-green-400 shadow-[0_10px_25px_-3px_rgba(34,197,94,0.6),0_4px_6px_-2px_rgba(34,197,94,0.4)] bg-gradient-to-br from-slate-700 to-slate-800'
+                      : updatedProductIds.has(product._id) 
+                        ? 'animate-pulse scale-[1.02] ring-2 ring-blue-400 shadow-[0_10px_25px_-3px_rgba(59,130,246,0.4),0_4px_6px_-2px_rgba(59,130,246,0.25)]' 
+                        : ''
+                  }`}
                 >
-                  {/* Stock Status Badge */}
-                  <div className="absolute top-3 right-3 z-10">
-                    {getActualAvailableQuantity(product) === 0 ? (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800">
-                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                        </svg>
-                        Sold Out
-                      </span>
-                    ) : getActualAvailableQuantity(product) <= 5 ? (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 border border-orange-200 dark:border-orange-800">
-                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                        Only {getActualAvailableQuantity(product)} left
-                      </span>
-                    ) : getActualAvailableQuantity(product) <= 10 ? (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800">
-                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
-                        {getActualAvailableQuantity(product)} available
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800">
-                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
-                        In Stock
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Product Image - Complete image visible */}
-                  <div className="mb-4 bg-gray-50 dark:bg-slate-600 rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-                    <div className="w-full h-32 sm:h-40 flex items-center justify-center p-2">
-                      <img
-                        src={getProductImage(product)}
-                        alt={product.name}
-                        className="max-w-full max-h-full object-contain cursor-pointer hover:opacity-80 transition-opacity rounded"
-                        onClick={() => openImageModal(getProductImage(product), product.name)}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/images/products/default.svg'
-                        }}
-                      />
+                  {/* Out of Stock Overlay */}
+                  {isOutOfStock && (
+                    <div className="absolute inset-0 bg-gray-900/30 flex items-center justify-center z-20">
+                      <div className="bg-red-500/95 backdrop-blur-sm text-white px-4 py-2 rounded-lg font-bold text-sm shadow-lg">
+                        OUT OF STOCK
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Product Info */}
-                  <div className="p-4 space-y-3">
-                    {/* Product Name & Category */}
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-slate-100 text-lg leading-tight line-clamp-2 mb-1">
-                        {product.name}
-                      </h3>
-                      {(product.description || product.category) && (
-                        <p className="text-sm text-gray-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                          {product.description || product.category}
-                        </p>
+                  )}
+                
+                  {/* Product Image - Full Width at Top */}
+                  <div 
+                    className="bg-slate-700 h-48 flex items-center justify-center overflow-hidden relative cursor-pointer hover:bg-slate-600 transition-colors"
+                    onClick={() => setSelectedImageProduct(product)}
+                  >
+                    {/* Stock Status Badge */}
+                    <div className="absolute top-3 right-3 z-10 flex flex-col gap-1 items-end">
+                      {/* NEW badge for newly created products */}
+                      {newProductIds.has(product._id) && (
+                        <span className="px-2 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-bold rounded shadow-lg animate-pulse">
+                          ✨ NEW
+                        </span>
+                      )}
+                      
+                      {/* Stock status badge */}
+                      {getActualAvailableQuantity(product) === 0 ? (
+                        <span className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded shadow-lg">
+                          SOLD OUT
+                        </span>
+                      ) : getActualAvailableQuantity(product) <= 5 ? (
+                        <span className="px-2 py-1 bg-orange-500 text-white text-xs font-bold rounded shadow-lg">
+                          {getActualAvailableQuantity(product)} LEFT
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 bg-green-500 text-white text-xs font-bold rounded shadow-lg">
+                          {getActualAvailableQuantity(product)} AVAILABLE
+                        </span>
                       )}
                     </div>
-                    
-                    {/* Price & Availability */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col">
-                        <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                          ₱{product.price.toFixed(2)}
-                        </span>
-                        <div className="flex items-center mt-1">
-                          <div className={`w-2 h-2 rounded-full mr-2 ${
+                    <img
+                      src={getProductImage(product)}
+                      alt={product.name}
+                      className="max-w-full max-h-full object-contain rounded hover:opacity-80 transition-opacity pointer-events-none"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/images/products/default.svg'
+                      }}
+                      loading="lazy"
+                    />
+                  </div>
+
+                  {/* Card Content */}
+                  <div className="p-4">
+                    {/* Product Name */}
+                    <h3 className="text-white font-semibold text-lg mb-1 line-clamp-1">
+                      {product.name}
+                    </h3>
+
+                    {/* Product Category/Description */}
+                    <p className="text-slate-300 text-sm mb-3 line-clamp-1">
+                      {product.description || product.category || 'Product'}
+                    </p>
+
+                    {/* Material Design Divider */}
+                    <div className="border-t border-slate-600 mb-4"></div>
+
+                    {/* Price & Stock Info */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-2xl font-bold text-blue-400">
+                        ₱{product.price.toFixed(2)}
+                      </div>
+                      <div className="text-right">
+                        <div>
+                          <div className={`text-sm font-bold ${
                             getActualAvailableQuantity(product) === 0 
-                              ? 'bg-red-500' 
+                              ? 'text-red-400' 
                               : getActualAvailableQuantity(product) <= 5 
-                              ? 'bg-orange-500' 
-                              : 'bg-green-500'
-                          }`}></div>
-                          <span className={`text-sm font-medium ${
-                            getActualAvailableQuantity(product) === 0 
-                              ? 'text-red-600 dark:text-red-400' 
-                              : getActualAvailableQuantity(product) <= 5 
-                              ? 'text-orange-600 dark:text-orange-400' 
-                              : 'text-green-600 dark:text-green-400'
+                              ? 'text-orange-400' 
+                              : 'text-green-400'
                           }`}>
-                            {getActualAvailableQuantity(product) === 0 
-                              ? 'Out of Stock' 
-                              : `${getActualAvailableQuantity(product)} in stock`
-                            }
-                          </span>
+                            {getActualAvailableQuantity(product) === 0 ? 'SOLD OUT' : `${getActualAvailableQuantity(product)} AVAILABLE`}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-1">
+                            {getActualAvailableQuantity(product) === 0 ? 'Not available' : 'Available now'}
+                          </div>
                         </div>
                       </div>
-                      
-                      {/* Cart & Reservation Status */}
-                      <div className="text-right">
+                    </div>
+
+                    {/* Sales-Specific Cart Status */}
                         {cart.find(item => item.product._id === product._id) && (
-                          <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400 text-xs mb-1">
+                      <div className="mb-4">
+                          <div className="flex items-center gap-1 text-orange-400 text-xs">
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                               <path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
                             </svg>
                             {cart.find(item => item.product._id === product._id)?.quantity} in cart
                           </div>
-                        )}
-                        {otherCashiersReservations[product._id] > 0 && (
-                          <div className="flex items-center gap-1 text-red-600 dark:text-red-400 text-xs">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                            </svg>
-                            {otherCashiersReservations[product._id]} reserved
-                          </div>
-                        )}
                       </div>
-                    </div>
-                    
-                    {/* Quantity Selector & Add to Cart */}
-                    <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-slate-600">
-                      {/* Quantity Selector */}
-                      <div className="flex items-center justify-center">
-                        <div className="flex items-center bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                    )}
+                  
+                    {/* Quantity Selector */}
+                    {(
+                      <div className="flex items-center justify-center mb-4">
+                        <div className="flex items-center bg-slate-700 rounded shadow-sm border border-slate-600">
                           <button
                             onClick={() => {
                               const currentQty = selectedQuantities[product._id] || 1
@@ -1179,38 +1408,21 @@ export default function SalesPage() {
                                 }))
                               }
                             }}
-                            disabled={getActualAvailableQuantity(product) === 0}
-                            className="p-2 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="p-2 text-white hover:bg-slate-600 rounded-l-lg transition-colors"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                             </svg>
                           </button>
                           <div className="px-4 py-2 min-w-[60px] text-center">
-                            <input
-                              type="number"
-                              min="1"
-                              max={getActualAvailableQuantity(product)}
-                              value={selectedQuantities[product._id] || 1}
-                              onChange={(e) => {
-                                const maxAvailable = getActualAvailableQuantity(product)
-                                const value = Math.max(1, Math.min(
-                                  parseInt(e.target.value) || 1,
-                                  maxAvailable
-                                ))
-                                setSelectedQuantities(prev => ({
-                                  ...prev,
-                                  [product._id]: value
-                                }))
-                              }}
-                              disabled={getActualAvailableQuantity(product) === 0}
-                              className="w-full text-center border-0 bg-transparent text-gray-900 dark:text-slate-100 focus:outline-none font-medium disabled:opacity-50"
-                            />
+                            <span className="text-white font-medium">
+                              {selectedQuantities[product._id] || 1}
+                            </span>
                           </div>
                           <button
                             onClick={() => {
                               const currentQty = selectedQuantities[product._id] || 1
-                              const maxQty = getActualAvailableQuantity(product)
+                              const maxQty = isOutOfStock ? 999 : getActualAvailableQuantity(product) // Allow higher quantities for out of stock
                               if (currentQty < maxQty) {
                                 setSelectedQuantities(prev => ({
                                   ...prev,
@@ -1218,53 +1430,58 @@ export default function SalesPage() {
                                 }))
                               }
                             }}
-                            disabled={getActualAvailableQuantity(product) === 0}
-                            className="p-2 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={!isOutOfStock && (selectedQuantities[product._id] || 1) >= getActualAvailableQuantity(product)}
+                            className={`p-2 rounded-r-lg transition-colors ${
+                              !isOutOfStock && (selectedQuantities[product._id] || 1) >= getActualAvailableQuantity(product)
+                                ? 'text-slate-500 cursor-not-allowed'
+                                : 'text-white hover:bg-slate-600'
+                            }`}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                             </svg>
                           </button>
                         </div>
                       </div>
-
-                      {/* Add to Cart Button */}
-                      <button
-                        onClick={() => addToCart(product, selectedQuantities[product._id] || 1)}
-                        disabled={getActualAvailableQuantity(product) === 0 || addingToCart === product._id}
-                        className={`w-full py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
-                          getActualAvailableQuantity(product) === 0
-                            ? 'bg-gray-200 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed'
-                            : addingToCart === product._id
-                            ? 'bg-blue-500 text-white cursor-wait'
-                            : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-md hover:shadow-lg transform hover:scale-[1.02] active:scale-[0.98]'
-                        }`}
-                      >
-                        {addingToCart === product._id ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                            Adding to Cart...
-                          </div>
-                        ) : getActualAvailableQuantity(product) === 0 ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
-                            </svg>
-                            {cart.find(item => item.product._id === product._id) ? 'All in Cart' : 'Out of Stock'}
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.1 5M7 13l-1.1 5m0 0h9.1M17 21a2 2 0 100-4 2 2 0 000 4zM9 21a2 2 0 100-4 2 2 0 000 4z" />
-                            </svg>
-                            Add {selectedQuantities[product._id] || 1} to Cart
-                          </div>
-                        )}
-                      </button>
-                    </div>
+                    )}
+                    
+                    {/* Add to Cart Button */}
+                    <button
+                      onClick={() => !isOutOfStock && addToCart(product, selectedQuantities[product._id] || 1)}
+                      disabled={isOutOfStock || addingToCart === product._id}
+                      className={`w-full py-3 px-4 rounded font-medium transition-all duration-200 flex items-center justify-center gap-2 uppercase text-sm tracking-wide ${
+                        isOutOfStock
+                          ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                          : addingToCart === product._id
+                          ? 'bg-orange-600 text-white cursor-wait shadow-[0_2px_4px_-1px_rgba(0,0,0,0.3)]'
+                          : 'bg-orange-600 hover:bg-orange-700 text-white shadow-[0_2px_4px_-1px_rgba(0,0,0,0.3)] hover:shadow-[0_4px_8px_-2px_rgba(0,0,0,0.4)] hover:scale-[1.02]'
+                      }`}
+                    >
+                      {isOutOfStock ? (
+                        <>
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                          </svg>
+                          {cart.find(item => item.product._id === product._id) ? 'All in Cart' : 'Out of Stock'}
+                        </>
+                      ) : addingToCart === product._id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                          Adding...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.1 5M7 13l-1.1 5m0 0h9.1M17 21a2 2 0 100-4 2 2 0 000 4zM9 21a2 2 0 100-4 2 2 0 000 4z" />
+                          </svg>
+                          Add {selectedQuantities[product._id] || 1} to Cart
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
-              ))}
+                )
+              })}
               </div>
 
               {/* Pagination Controls */}
@@ -1522,25 +1739,6 @@ export default function SalesPage() {
                     </div>
                   )}
 
-                  {/* Cashier Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                      Cashier *
-                    </label>
-                    <select
-                      value={selectedCashier}
-                      onChange={(e) => setSelectedCashier(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                      required
-                    >
-                      <option value="">Select Cashier</option>
-                      {store?.cashiers?.map((cashier) => (
-                        <option key={cashier} value={cashier}>
-                          {cashier}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
 
                   {saleData.paymentStatus !== 'paid' && !saleData.customerName.trim() && (
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
@@ -1719,7 +1917,10 @@ export default function SalesPage() {
                   <span className="font-medium">Detected:</span> Page refresh shortcut
                 </p>
                 <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                  F5, Ctrl+R, or Cmd+R
+                  F5, Ctrl+R, Ctrl+F5, or Cmd+R
+                </p>
+                <p className="text-xs text-blue-500 dark:text-blue-400 mt-2 italic">
+                  Note: Browser refresh button shows native alert (browser security)
                 </p>
               </div>
             </div>
@@ -1777,6 +1978,86 @@ export default function SalesPage() {
             </div>
           </div>
         </Modal>
+
+        {/* Product Image Modal */}
+        {selectedImageProduct && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedImageProduct(null)}>
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-6xl w-full max-h-[85vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-600">
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-100 truncate pr-4">
+                  {selectedImageProduct.name}
+                </h3>
+                <button onClick={() => setSelectedImageProduct(null)} className="flex-shrink-0 p-2 text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-700 rounded-full transition-all duration-200">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              
+              {/* Modal Content - Landscape Layout */}
+              <div className="flex flex-col lg:flex-row h-full max-h-[calc(85vh-80px)]">
+                {/* Image Section - Left Side */}
+                <div className="flex-1 lg:flex-[2] p-4 sm:p-6 flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+                  <img src={selectedImageProduct.imageUrl || '/images/products/default.svg'} alt={selectedImageProduct.name} className="max-w-full max-h-full object-contain rounded-lg shadow-lg" style={{ maxHeight: '500px' }} onError={(e) => { (e.target as HTMLImageElement).src = '/images/products/default.svg' }} />
+                </div>
+                
+                {/* Details Section - Right Side */}
+                <div className="flex-1 p-4 sm:p-6 overflow-y-auto bg-white dark:bg-slate-800">
+                  <div className="space-y-6">
+                    {/* Price Badge */}
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center px-4 py-2 rounded-full text-lg font-bold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        ₱{selectedImageProduct.price.toFixed(2)}
+                      </span>
+                      {selectedImageProduct.category && (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          {selectedImageProduct.category}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Product Details */}
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-3 flex items-center">
+                          <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          Product Information
+                        </h4>
+                        <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4 space-y-2">
+                          <p className="text-gray-700 dark:text-slate-300">
+                            <span className="font-semibold text-gray-900 dark:text-slate-100">Name:</span> {selectedImageProduct.name}
+                          </p>
+                          <p className="text-gray-700 dark:text-slate-300">
+                            <span className="font-semibold text-gray-900 dark:text-slate-100">Availability:</span> {getActualAvailableQuantity(selectedImageProduct)} units available
+                          </p>
+                          {/* Sales-Specific Information */}
+                          {cart.find(item => item.product._id === selectedImageProduct._id) && (
+                            <p className="text-gray-700 dark:text-slate-300">
+                              <span className="font-semibold text-gray-900 dark:text-slate-100">In Cart:</span> {cart.find(item => item.product._id === selectedImageProduct._id)?.quantity} items
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {selectedImageProduct.description && (
+                        <div>
+                          <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-3 flex items-center">
+                            <svg className="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            Description
+                          </h4>
+                          <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4">
+                            <p className="text-gray-700 dark:text-slate-300 leading-relaxed">
+                              {selectedImageProduct.description}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
     </ProtectedRoute>

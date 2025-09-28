@@ -26,6 +26,7 @@ interface Product {
   seller?: string            // Seller/supplier name
   imageUrl?: string
   createdAt: string
+  lastUpdated?: string       // For forcing React re-renders
 }
 
 // Component for truncated description with hover functionality
@@ -93,6 +94,7 @@ export default function ProductsPage() {
   const { store } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [updatedProductIds, setUpdatedProductIds] = useState<Set<string>>(new Set())
   
   // Real-time inventory updates via WebSocket
   const { 
@@ -145,19 +147,47 @@ export default function ProductsPage() {
 
   // Apply real-time inventory updates to products
   useEffect(() => {
+    console.log('🔍 Products Page: inventoryUpdates changed:', inventoryUpdates.length, inventoryUpdates)
     if (inventoryUpdates.length > 0) {
-      setProducts(prevProducts => 
-        prevProducts.map(product => {
+      console.log('🔄 Products Page: Applying inventory updates:', inventoryUpdates)
+      
+      // Track which products are being updated for animation
+      const updatedIds = new Set<string>()
+      
+      // Force a re-render by creating a completely new array
+      setProducts(prevProducts => {
+        const updatedProducts = prevProducts.map(product => {
           const update = inventoryUpdates.find(u => u.productId === product._id)
-          if (update) {
+          if (update && update.quantity !== undefined) {
+            console.log(`📦 Products Page: Updating ${product.name} quantity from ${product.quantity} to ${update.quantity}`)
+            updatedIds.add(product._id)
+            // Create a completely new object to force React re-render
             return {
               ...product,
-              quantity: update.quantity ?? product.quantity
+              _id: product._id, // Ensure _id is preserved
+              quantity: update.quantity,
+              totalQuantity: update.quantity,
+              availableQuantity: update.quantity,
+              reservedQuantity: product.reservedQuantity || 0,
+              // Add a timestamp to force re-render
+              lastUpdated: new Date().toISOString()
             }
           }
           return product
         })
-      )
+        
+        console.log('✅ Products Page: Forcing UI re-render with updated products')
+        // Always return a new array to force re-render
+        return [...updatedProducts]
+      })
+      
+      // Set the updated product IDs for animation
+      setUpdatedProductIds(updatedIds)
+      
+      // Clear the animation after 2 seconds
+      setTimeout(() => {
+        setUpdatedProductIds(new Set())
+      }, 2000)
     }
   }, [inventoryUpdates])
 
@@ -231,17 +261,20 @@ export default function ProductsPage() {
   }
 
   const handleEdit = (product: Product) => {
-    setEditingProduct(product)
+    // Get the most up-to-date product data from the current products state
+    const currentProduct = products.find(p => p._id === product._id) || product
+    
+    setEditingProduct(currentProduct)
     setFormData({
-      name: product.name,
-      cost: product.cost ? product.cost.toString() : '',
-      price: product.price.toString(),
-      quantity: (product.totalQuantity || product.quantity).toString(),  // Use totalQuantity if available, fallback to legacy quantity
-      description: product.description || '',
-      category: product.category || '',
-      sku: product.sku || '',
-      seller: product.seller || '',
-      imageUrl: product.imageUrl || ''
+      name: currentProduct.name,
+      cost: currentProduct.cost ? currentProduct.cost.toString() : '',
+      price: currentProduct.price.toString(),
+      quantity: (currentProduct.totalQuantity || currentProduct.quantity).toString(),  // Use totalQuantity if available, fallback to legacy quantity
+      description: currentProduct.description || '',
+      category: currentProduct.category || '',
+      sku: currentProduct.sku || '',
+      seller: currentProduct.seller || '',
+      imageUrl: currentProduct.imageUrl || ''
     })
     setShowModal(true)
   }
@@ -401,6 +434,9 @@ export default function ProductsPage() {
               }`}>
                 {isWebSocketConnected ? 'Live' : 'Offline'}
               </span>
+              <span className="text-xs text-gray-500 dark:text-slate-400">
+                ({inventoryUpdates.length} updates)
+              </span>
             </div>
           </div>
         </div>
@@ -451,7 +487,14 @@ export default function ProductsPage() {
                 </thead>
                 <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
                   {products.map((product) => (
-                    <tr key={product._id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                    <tr 
+                      key={`${product._id}-${product.lastUpdated || Date.now()}`} 
+                      className={`hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-500 ${
+                        updatedProductIds.has(product._id) 
+                          ? 'animate-pulse scale-[1.02] bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-400 shadow-lg' 
+                          : ''
+                      }`}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center justify-center">
                           <img
@@ -494,10 +537,14 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm">
-                          <div className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          <div className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full transition-all duration-500 ${
                             (product.availableQuantity || product.quantity) < 10 
                               ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' 
                               : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                          } ${
+                            updatedProductIds.has(product._id) 
+                              ? 'animate-pulse scale-110 ring-2 ring-blue-400 shadow-lg font-bold' 
+                              : ''
                           }`}>
                             {product.availableQuantity !== undefined ? product.availableQuantity : product.quantity} Available
                           </div>
@@ -538,7 +585,14 @@ export default function ProductsPage() {
               {/* Mobile Cards */}
               <div className="md:hidden space-y-4 p-4">
                 {products.map((product) => (
-                  <div key={product._id} className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-white dark:bg-slate-700">
+                  <div 
+                    key={`${product._id}-${product.lastUpdated || Date.now()}`} 
+                    className={`border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-white dark:bg-slate-700 transition-all duration-500 ${
+                      updatedProductIds.has(product._id) 
+                        ? 'animate-pulse scale-[1.02] bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-400 shadow-lg' 
+                        : ''
+                    }`}
+                  >
                     <div className="flex items-start space-x-3 mb-3">
                       <img
                         src={getProductImage(product)}
@@ -575,10 +629,14 @@ export default function ProductsPage() {
                       <div>
                         <span className="text-gray-500 dark:text-slate-400">Stock:</span>
                         <div className="ml-1">
-                          <span className={`font-medium ${
+                          <span className={`font-medium transition-all duration-500 ${
                             (product.availableQuantity || product.quantity) > 10 ? 'text-green-600 dark:text-green-400' :
                             (product.availableQuantity || product.quantity) > 0 ? 'text-yellow-600 dark:text-yellow-400' :
                             'text-red-600 dark:text-red-400'
+                          } ${
+                            updatedProductIds.has(product._id) 
+                              ? 'animate-pulse scale-110 font-bold drop-shadow-lg' 
+                              : ''
                           }`}>
                             {product.availableQuantity !== undefined ? product.availableQuantity : product.quantity} Available
                           </span>

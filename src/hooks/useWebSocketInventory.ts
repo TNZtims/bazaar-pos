@@ -5,6 +5,8 @@ interface InventoryUpdate {
   productId: string
   quantity?: number
   timestamp: string
+  isNewProduct?: boolean
+  productData?: any
 }
 
 interface ProductDeletedEvent {
@@ -57,12 +59,14 @@ export function useWebSocketInventory({
     })
 
     newSocket.on('connect', () => {
-      console.log('WebSocket connected')
+      console.log('🔗 WebSocket connected successfully')
+      console.log('🏪 Joining store room:', storeId)
       setIsConnected(true)
       setError(null)
       
       // Join store-specific room
       newSocket.emit('join-store', storeId)
+      console.log('✅ Store join request sent')
     })
 
     newSocket.on('disconnect', () => {
@@ -78,7 +82,7 @@ export function useWebSocketInventory({
 
     // Listen for inventory changes
     newSocket.on('inventory-changed', (data: InventoryUpdate) => {
-      console.log('Received inventory update:', data)
+      console.log('🔔 WebSocket: Received inventory update:', data)
       
       setUpdates(prevUpdates => {
         // Update existing or add new
@@ -87,9 +91,40 @@ export function useWebSocketInventory({
         if (existingIndex >= 0) {
           const newUpdates = [...prevUpdates]
           newUpdates[existingIndex] = { ...newUpdates[existingIndex], ...data }
+          console.log('📝 WebSocket: Updated existing product in updates array:', newUpdates[existingIndex])
           return newUpdates
         } else {
+          console.log('➕ WebSocket: Added new product to updates array:', data)
           return [...prevUpdates, data]
+        }
+      })
+    })
+
+    // Listen for new product creation
+    newSocket.on('product-created', (data: { product: any, timestamp: string }) => {
+      console.log('🔔 WebSocket: Received product creation:', data)
+      
+      // Add the new product as an inventory update so existing logic can handle it
+      const inventoryUpdate: InventoryUpdate = {
+        productId: data.product._id,
+        quantity: data.product.quantity,
+        timestamp: data.timestamp,
+        isNewProduct: true, // Flag to indicate this is a new product
+        productData: data.product // Include full product data
+      }
+      
+      setUpdates(prevUpdates => {
+        // Check if product already exists
+        const existingIndex = prevUpdates.findIndex(update => update.productId === data.product._id)
+        
+        if (existingIndex >= 0) {
+          console.log('📝 WebSocket: Product already exists, updating:', data.product.name)
+          const newUpdates = [...prevUpdates]
+          newUpdates[existingIndex] = { ...newUpdates[existingIndex], ...inventoryUpdate }
+          return newUpdates
+        } else {
+          console.log('➕ WebSocket: Added new product creation to updates array:', data.product.name)
+          return [...prevUpdates, inventoryUpdate]
         }
       })
     })

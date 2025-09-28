@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    
+
     if (!['reserve', 'release'].includes(action)) {
       return NextResponse.json(
         { message: 'Action must be "reserve" or "release"' },
@@ -61,13 +61,14 @@ export async function POST(request: NextRequest) {
     let currentProduct = product
     if (action === 'reserve') {
       // console.log('🔄 Fetching latest product data to avoid race conditions...')
-      currentProduct = await Product.findById(productId)
-      if (!currentProduct) {
+      const latestProduct = await Product.findById(productId)
+      if (!latestProduct) {
         return NextResponse.json(
           { message: 'Product not found during final validation' },
           { status: 404 }
         )
       }
+      currentProduct = latestProduct
     }
     
     // Calculate the quantity change
@@ -127,26 +128,18 @@ export async function POST(request: NextRequest) {
     // console.log('Product updated successfully. New quantity:', updatedProduct.quantity)
     
     // Broadcast the inventory change via WebSocket
-    if (global.io) {
-      // console.log('Broadcasting inventory change via WebSocket:', {
-      //   productId,
-      //   quantity: updatedProduct.quantity,
-      //   storeRoom: `store-${storeId}`
-      // })
-      
-      global.io.to(`store-${storeId}`).emit('inventory-changed', {
+    if ((global as any).io && updatedProduct) {
+      (global as any).io.to(`store-${storeId}`).emit('inventory-changed', {
         productId,
         quantity: updatedProduct.quantity,
         timestamp: new Date().toISOString()
       })
-    } else {
-      // console.log('WebSocket not available - global.io is null')
     }
     
     return NextResponse.json({
       message: `Product quantity ${action}d successfully`,
       productId,
-      newQuantity: updatedProduct.quantity,
+      newQuantity: updatedProduct?.quantity || 0,
       quantityChanged: Math.abs(quantityChange)
     }, { status: 200 })
     

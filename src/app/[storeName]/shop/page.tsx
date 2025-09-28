@@ -42,11 +42,29 @@ interface Store {
   logoImageUrl?: string
 }
 
+/**
+ * Public Shop Page - Unified UI with Store-Specific Content
+ * 
+ * CONSISTENT ACROSS ALL STORES:
+ * - UI/UX design and layout
+ * - Calculations and pricing logic  
+ * - Cart and checkout behavior
+ * - Features and functionality
+ * - Settings and configurations
+ * 
+ * STORE-SPECIFIC CONTENT:
+ * - Products and inventory (from each store's database)
+ * - Store name, banner, and logo
+ * - Store-specific data and content
+ */
 export default function PublicShopPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [cart, setCart] = useState<CartItem[]>([]) // Regular shopping cart
   const [preorderCart, setPreorderCart] = useState<CartItem[]>([]) // Preorder cart
   const [orders, setOrders] = useState<any[]>([]) // User's orders
+  const [updatedProductIds, setUpdatedProductIds] = useState<Set<string>>(new Set())
+  const [newProductIds, setNewProductIds] = useState<Set<string>>(new Set())
+  const [newProductsToNotify, setNewProductsToNotify] = useState<any[]>([])
   const [confirmedReservations, setConfirmedReservations] = useState<any[]>([]) // Confirmed reservations
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
@@ -66,6 +84,21 @@ export default function PublicShopPage() {
   const [storeId, setStoreId] = useState<string | null>(null)
   const [userHasInteracted, setUserHasInteracted] = useState(false)
   const [storeClosed, setStoreClosed] = useState(false)
+  const [selectedImageProduct, setSelectedImageProduct] = useState<Product | null>(null)
+
+  // Close modal on Escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedImageProduct) {
+        setSelectedImageProduct(null)
+      }
+    }
+
+    if (selectedImageProduct) {
+      document.addEventListener('keydown', handleEscape)
+      return () => document.removeEventListener('keydown', handleEscape)
+    }
+  }, [selectedImageProduct])
   
   // Real-time inventory updates via WebSocket
   const { 
@@ -88,20 +121,82 @@ export default function PublicShopPage() {
   // Apply real-time inventory updates to products
   useEffect(() => {
     if (inventoryUpdates.length > 0) {
+      // Track which products are being updated for animation
+      const updatedIds = new Set<string>()
+      const newIds = new Set<string>()
+      
+      // Handle new product creation first
+      const newProducts = inventoryUpdates.filter(u => u.isNewProduct && u.productData)
+      let productsToNotify: any[] = []
+      
+      if (newProducts.length > 0) {
+        console.log('📦 Public Store: Adding new products:', newProducts.map(p => p.productData.name))
+        
+        setProducts(prevProducts => {
+          const existingIds = new Set(prevProducts.map(p => p._id))
+          const productsToAdd = newProducts
+            .filter(update => !existingIds.has(update.productData._id))
+            .map(update => {
+              newIds.add(update.productData._id)
+              console.log('➕ Public Store: Adding new product:', update.productData.name)
+              return {
+                ...update.productData,
+                lastUpdated: update.timestamp
+              }
+            })
+          
+          if (productsToAdd.length > 0) {
+            productsToNotify = productsToAdd // Store for notification outside state update
+            return [...prevProducts, ...productsToAdd]
+          }
+          return prevProducts
+        })
+        
+        // Set products to notify via separate state to trigger useEffect
+        if (productsToNotify.length > 0) {
+          setNewProductsToNotify(productsToNotify)
+        }
+      }
+      
+      // Handle regular inventory updates
       setProducts(prevProducts => 
         prevProducts.map(product => {
-          const update = inventoryUpdates.find(u => u.productId === product._id)
+          const update = inventoryUpdates.find(u => u.productId === product._id && !u.isNewProduct)
           if (update) {
+            updatedIds.add(product._id)
             return {
               ...product,
-              quantity: update.quantity ?? product.quantity
+              quantity: update.quantity ?? product.quantity,
+              lastUpdated: update.timestamp
             }
           }
           return product
         })
       )
+      
+      // Set animation IDs
+      setUpdatedProductIds(updatedIds)
+      setNewProductIds(newIds)
+      
+      // Clear animations after timeout
+      setTimeout(() => {
+        setUpdatedProductIds(new Set())
+      }, 2000)
+      
+      setTimeout(() => {
+        setNewProductIds(new Set())
+      }, 3000)
     }
   }, [inventoryUpdates])
+  
+  // Handle new product notifications separately to avoid render cycle issues
+  useEffect(() => {
+    if (newProductsToNotify.length > 0) {
+      setSuccessMessage(`${newProductsToNotify.length} new product${newProductsToNotify.length > 1 ? 's' : ''} available: ${newProductsToNotify.map(p => p.name).join(', ')}!`)
+      setTimeout(() => setSuccessMessage(''), 3000)
+      setNewProductsToNotify([]) // Clear after showing notification
+    }
+  }, [newProductsToNotify])
 
   // Check for order editing mode
   useEffect(() => {
@@ -140,6 +235,8 @@ export default function PublicShopPage() {
         setStoreStatus(data.status)
         setStoreId(data.id) // Set the resolved store ID for other API calls
         setStoreClosed(false) // Store is open
+        
+        console.log(`🏪 Frontend: Store info loaded for ${storeName} → ID: ${data.id}`)
       } else {
         setError('Store not found')
         setStoreClosed(true)
@@ -402,7 +499,9 @@ export default function PublicShopPage() {
     setStoreClosed(false)
     setLoading(true)
     setProducts([])
+    setStoreId(null) // Reset store ID to force fresh data
     
+    console.log(`🔄 Store switching: Resetting state for ${storeName}`)
     fetchStoreInfo()
   }, [storeName])
 
@@ -476,13 +575,26 @@ export default function PublicShopPage() {
           ? '/api/products'
           : `/api/products/public?store=${storeName}`
           
-        const response = await fetch(apiUrl, {
-          credentials: 'include'
+        // Add cache-busting to ensure fresh products from database
+        const cacheBustUrl = apiUrl.includes('?') 
+          ? `${apiUrl}&_t=${Date.now()}`
+          : `${apiUrl}?_t=${Date.now()}`
+        
+        const response = await fetch(cacheBustUrl, {
+          credentials: 'include',
+          cache: 'no-cache',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
         })
         
         if (response.ok) {
           const data = await response.json()
-          setProducts(data.products || [])
+          const newProducts = data.products || []
+          console.log(`🛍️ Frontend: Loaded ${newProducts.length} products for store ${storeName}`)
+          console.log('🔍 Products with quantities:', newProducts.map((p: any) => ({ name: p.name, quantity: p.quantity, available: p.quantity || 0 })))
+          setProducts(newProducts)
         } else if (response.status === 403) {
           const errorData = await response.json()
           setError(errorData.message || 'Store is currently closed to public access')
@@ -511,14 +623,25 @@ export default function PublicShopPage() {
         ? '/api/products'
         : `/api/products/public?store=${storeName}`
         
-      const response = await fetch(apiUrl, {
-        credentials: 'include'
+      // Add cache-busting to ensure fresh products
+      const cacheBustUrl = apiUrl.includes('?') 
+        ? `${apiUrl}&_t=${Date.now()}`
+        : `${apiUrl}?_t=${Date.now()}`
+      
+      const response = await fetch(cacheBustUrl, {
+        credentials: 'include',
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
       })
       
       if (response.ok) {
         const data = await response.json()
-        setProducts(data.products || [])
-        // console.log('🔄 Products refreshed after order confirmation')
+        const newProducts = data.products || []
+        console.log(`🔄 Frontend: Refreshed ${newProducts.length} products for store ${storeName}`)
+        setProducts(newProducts)
       } else {
         console.error('Failed to refresh products:', response.status, response.statusText)
       }
@@ -559,12 +682,10 @@ export default function PublicShopPage() {
     fetchOrders()
   }, [user])
 
-  // Auto-switch to preorder tab when store is offline
+  // FORCE ALL PUBLIC STORES TO USE PREORDER MODE (ORANGE BUTTONS) AS THE ONLY SHOPPING EXPERIENCE
   useEffect(() => {
-    if (storeStatus && !storeStatus.isOnline && activeTab === 'shop') {
-      setActiveTab('preorder')
-    }
-  }, [storeStatus, activeTab])
+    setActiveTab('preorder') // Force preorder mode for ALL stores regardless of status
+  }, [storeName])
 
   // Note: No WebSocket inventory updates - availability only changes when orders are placed
 
@@ -1267,6 +1388,13 @@ export default function PublicShopPage() {
     }
   })
 
+  // Debug logging
+  console.log('🔍 Debug - All products:', products.length)
+  console.log('🔍 Debug - Filtered products:', filteredProducts.length)
+  console.log('🔍 Debug - Out of stock products:', products.filter((p: any) => (p.quantity || 0) === 0).map((p: any) => ({ name: p.name, quantity: p.quantity })))
+  console.log('🔍 Debug - Active tab:', activeTab)
+  console.log('🔍 Debug - Search term:', search)
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
@@ -1399,7 +1527,7 @@ export default function PublicShopPage() {
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                 <div className="flex-1">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100">
-                    {activeTab === 'shop' ? 'Available Products' : 'Preorder Items'}
+                    {activeTab === 'shop' ? 'Available Products' : 'Today\'s Menu'}
                   </h2>
                   <p className="text-sm text-gray-600 dark:text-slate-400 mt-1 max-w-4xl">
                     {activeTab === 'shop' 
@@ -1477,6 +1605,12 @@ export default function PublicShopPage() {
                         isOutOfStock
                           ? 'bg-slate-800/50 opacity-60 cursor-not-allowed shadow-[0_1px_3px_0_rgba(0,0,0,0.3),0_1px_2px_0_rgba(0,0,0,0.2)]'
                           : 'bg-slate-800 cursor-pointer shadow-[0_1px_3px_0_rgba(0,0,0,0.3),0_1px_2px_0_rgba(0,0,0,0.2)] hover:shadow-[0_10px_15px_-3px_rgba(0,0,0,0.4),0_4px_6px_-2px_rgba(0,0,0,0.25)] hover:-translate-y-1'
+                      } ${
+                        newProductIds.has(product._id)
+                          ? 'animate-bounce scale-[1.05] ring-4 ring-green-400 shadow-[0_10px_25px_-3px_rgba(34,197,94,0.6),0_4px_6px_-2px_rgba(34,197,94,0.4)] bg-gradient-to-br from-slate-700 to-slate-800'
+                          : updatedProductIds.has(product._id) 
+                            ? 'animate-pulse scale-[1.02] ring-2 ring-blue-400 shadow-[0_10px_25px_-3px_rgba(59,130,246,0.4),0_4px_6px_-2px_rgba(59,130,246,0.25)]' 
+                            : ''
                       }`}
                     >
                       {/* Out of Stock Overlay */}
@@ -1489,37 +1623,34 @@ export default function PublicShopPage() {
                       )}
                     
                     {/* Product Image - Full Width at Top */}
-                    <div className="bg-slate-700 h-48 flex items-center justify-center overflow-hidden relative">
+                    <div 
+                      className="bg-slate-700 h-48 flex items-center justify-center overflow-hidden relative cursor-pointer hover:bg-slate-600 transition-colors"
+                      onClick={() => setSelectedImageProduct(product)}
+                    >
                     {/* Stock Status Badge */}
                     <div className="absolute top-3 right-3 z-10">
-                      {activeTab === 'shop' ? (
-                        getActualAvailableQuantity(product) === 0 ? (
-                          <span className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded shadow-lg">
-                            SOLD OUT
-                          </span>
-                        ) : getActualAvailableQuantity(product) <= 5 ? (
-                          <span className="px-2 py-1 bg-orange-500 text-white text-xs font-bold rounded shadow-lg">
-                            {getActualAvailableQuantity(product)} LEFT
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 bg-green-500 text-white text-xs font-bold rounded shadow-lg">
-                            {getActualAvailableQuantity(product)} AVAILABLE
-                          </span>
-                        )
+                      {getActualAvailableQuantity(product) === 0 ? (
+                        <span className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded shadow-lg">
+                          SOLD OUT
+                        </span>
+                      ) : getActualAvailableQuantity(product) <= 5 ? (
+                        <span className="px-2 py-1 bg-orange-500 text-white text-xs font-bold rounded shadow-lg">
+                          {getActualAvailableQuantity(product)} LEFT
+                        </span>
                       ) : (
-                        <span className="px-2 py-1 bg-blue-500 text-white text-xs font-bold rounded shadow-lg">
-                          {getActualAvailableQuantity(product) > 0 ? `${getActualAvailableQuantity(product)} FOR PREORDER` : 'PREORDER UNAVAILABLE'}
+                        <span className="px-2 py-1 bg-green-500 text-white text-xs font-bold rounded shadow-lg">
+                          {getActualAvailableQuantity(product)} AVAILABLE
                         </span>
                       )}
                     </div>
                     <img
                       src={product.imageUrl || '/images/products/default.svg'}
                       alt={product.name}
-                        className="max-w-full max-h-full object-contain rounded"
+                      className="max-w-full max-h-full object-contain rounded hover:opacity-80 transition-opacity pointer-events-none"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = '/images/products/default.svg'
                       }}
-                        loading="lazy"
+                      loading="lazy"
                     />
                   </div>
 
@@ -1571,7 +1702,7 @@ export default function PublicShopPage() {
                               {getActualAvailableQuantity(product) === 0 ? 'SOLD OUT' : `${getActualAvailableQuantity(product)} AVAILABLE`}
                             </div>
                             <div className="text-xs text-slate-400 mt-1">
-                              {getActualAvailableQuantity(product) === 0 ? 'Not available' : 'For preorder'}
+                              {getActualAvailableQuantity(product) === 0 ? 'Not available' : 'Available now'}
                             </div>
                           </div>
                         )}
@@ -1579,9 +1710,8 @@ export default function PublicShopPage() {
                     </div>
                   
                     {/* Quantity Selector */}
-                      {(activeTab === 'shop' ? getActualAvailableQuantity(product) > 0 : activeTab === 'preorder') && !isOutOfStock && (
-                      <div className="flex items-center justify-center mb-4">
-                          <div className="flex items-center bg-slate-700 rounded shadow-sm border border-slate-600">
+                    <div className="flex items-center justify-center mb-4">
+                        <div className="flex items-center bg-slate-700 rounded shadow-sm border border-slate-600">
                           <button
                             onClick={() => {
                               const currentQty = selectedQuantities[product._id] || 1
@@ -1606,7 +1736,7 @@ export default function PublicShopPage() {
                           <button
                             onClick={() => {
                               const currentQty = selectedQuantities[product._id] || 1
-                              const maxQty = getActualAvailableQuantity(product)
+                              const maxQty = isOutOfStock ? 999 : getActualAvailableQuantity(product) // Allow higher quantities for out of stock
                               if (currentQty < maxQty) {
                                 setSelectedQuantities(prev => ({
                                   ...prev,
@@ -1614,9 +1744,9 @@ export default function PublicShopPage() {
                                 }))
                               }
                             }}
-                            disabled={(selectedQuantities[product._id] || 1) >= getActualAvailableQuantity(product)}
+                            disabled={!isOutOfStock && (selectedQuantities[product._id] || 1) >= getActualAvailableQuantity(product)}
                             className={`p-2 rounded-r-lg transition-colors ${
-                              (selectedQuantities[product._id] || 1) >= getActualAvailableQuantity(product)
+                              !isOutOfStock && (selectedQuantities[product._id] || 1) >= getActualAvailableQuantity(product)
                                 ? 'text-slate-500 cursor-not-allowed'
                                 : 'text-white hover:bg-slate-600'
                             }`}
@@ -1627,7 +1757,6 @@ export default function PublicShopPage() {
                           </button>
                         </div>
                       </div>
-                    )}
                     
                     {/* Add to Cart Button */}
                     <button
@@ -1661,7 +1790,7 @@ export default function PublicShopPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.1 5M7 13l-1.1 5m0 0h9.1M17 21a2 2 0 100-4 2 2 0 000 4zM9 21a2 2 0 100-4 2 2 0 000 4z" />
                           </svg>
                           {activeTab === 'preorder' 
-                            ? 'Preorder Now' 
+                            ? 'Reserve Now' 
                             : `Add ${selectedQuantities[product._id] || 1} to Cart`
                           }
                         </>
@@ -2034,6 +2163,97 @@ export default function PublicShopPage() {
                       : (editingOrder ? 'Update Order' : 'Confirm Order')
                     }
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Modal */}
+      {selectedImageProduct && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedImageProduct(null)}>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-6xl w-full max-h-[85vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-600">
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-100 truncate pr-4">
+                {selectedImageProduct.name}
+              </h3>
+              <button
+                onClick={() => setSelectedImageProduct(null)}
+                className="flex-shrink-0 p-2 text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-700 rounded-full transition-all duration-200"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Modal Content - Landscape Layout */}
+            <div className="flex flex-col lg:flex-row h-full max-h-[calc(85vh-80px)]">
+              {/* Image Section - Left Side */}
+              <div className="flex-1 lg:flex-[2] p-4 sm:p-6 flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+                <img
+                  src={selectedImageProduct.imageUrl || '/images/products/default.svg'}
+                  alt={selectedImageProduct.name}
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+                  style={{ maxHeight: '500px' }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/images/products/default.svg'
+                  }}
+                />
+              </div>
+              
+              {/* Details Section - Right Side */}
+              <div className="flex-1 p-4 sm:p-6 overflow-y-auto bg-white dark:bg-slate-800">
+                <div className="space-y-6">
+                  {/* Price Badge */}
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center px-4 py-2 rounded-full text-lg font-bold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                      ₱{selectedImageProduct.price.toFixed(2)}
+                    </span>
+                    {selectedImageProduct.category && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                        {selectedImageProduct.category}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Product Details */}
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-3 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Product Information
+                      </h4>
+                      <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4 space-y-2">
+                        <p className="text-gray-700 dark:text-slate-300">
+                          <span className="font-semibold text-gray-900 dark:text-slate-100">Name:</span> {selectedImageProduct.name}
+                        </p>
+                        <p className="text-gray-700 dark:text-slate-300">
+                          <span className="font-semibold text-gray-900 dark:text-slate-100">Availability:</span> {getActualAvailableQuantity(selectedImageProduct)} units available
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {selectedImageProduct.description && (
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-3 flex items-center">
+                          <svg className="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          Description
+                        </h4>
+                        <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4">
+                          <p className="text-gray-700 dark:text-slate-300 leading-relaxed">
+                            {selectedImageProduct.description}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
