@@ -948,6 +948,15 @@ export default function PublicShopPage() {
     return currentCart.reduce((total, item) => total + (item.product.price * item.quantity), 0)
   }
 
+  // Calculate actual available quantity for display
+  const getActualAvailableQuantity = (product: Product) => {
+    const currentCart = activeTab === 'preorder' ? preorderCart : cart
+    const cartItem = currentCart.find(item => item.product._id === product._id)
+    const localCartQuantity = cartItem ? cartItem.quantity : 0
+    const baseQuantity = product.quantity || 0
+    return Math.max(0, baseQuantity - localCartQuantity)
+  }
+
   // Helper function to get status display text and colors
   const getStatusDisplay = (approvalStatus: string, paymentStatus?: string) => {
     // If there's payment status, use that for display
@@ -1128,13 +1137,6 @@ export default function PublicShopPage() {
     } catch (err) {
       setError('Failed to load order for editing')
     }
-  }
-
-
-  // Calculate actual available quantity - always use raw stock quantity
-  // Cart items don't affect displayed availability in public shop
-  const getActualAvailableQuantity = (product: any) => {
-    return Math.max(0, product.quantity || 0)
   }
 
   const handlePlaceOrder = () => {
@@ -1383,8 +1385,9 @@ export default function PublicShopPage() {
       // Show all products (including sold out ones) - they'll be styled as disabled
       return matchesSearch
     } else {
-      // Show products available for preorder
-      return matchesSearch && product.availableForPreorder
+      // Show all products in preorder mode (including out of stock ones)
+      // Out of stock products will be styled as disabled but still visible
+      return matchesSearch
     }
   })
 
@@ -1624,7 +1627,7 @@ export default function PublicShopPage() {
                     
                     {/* Product Image - Full Width at Top */}
                     <div 
-                      className="bg-slate-700 h-48 flex items-center justify-center overflow-hidden relative cursor-pointer hover:bg-slate-600 transition-colors"
+                      className="bg-slate-700 h-48 flex items-center justify-center overflow-hidden relative cursor-pointer hover:bg-slate-600 transition-colors group"
                       onClick={() => setSelectedImageProduct(product)}
                     >
                     {/* Stock Status Badge */}
@@ -1643,10 +1646,20 @@ export default function PublicShopPage() {
                         </span>
                       )}
                     </div>
+                    
+                    {/* Enlarge Icon - Shows on Hover */}
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-10">
+                      <div className="bg-white/90 backdrop-blur-sm rounded-full p-3 shadow-lg transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                        <svg className="w-6 h-6 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                        </svg>
+                      </div>
+                    </div>
+                    
                     <img
                       src={product.imageUrl || '/images/products/default.svg'}
                       alt={product.name}
-                      className="max-w-full max-h-full object-contain rounded hover:opacity-80 transition-opacity pointer-events-none"
+                      className="max-w-full max-h-full object-contain rounded group-hover:opacity-80 transition-opacity pointer-events-none"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = '/images/products/default.svg'
                       }}
@@ -1861,15 +1874,23 @@ export default function PublicShopPage() {
                         className="flex items-center p-3 bg-gray-50 dark:bg-slate-700 rounded-lg space-x-3"
                       >
                         {/* Product Image */}
-                        <div className="flex-shrink-0">
+                        <div className="flex-shrink-0 relative group cursor-pointer" onClick={() => setSelectedImageProduct(item.product)}>
                           <img
                             src={item.product.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjNjM2MzYzIi8+CjxwYXRoIGQ9Ik0xMiAxNkwyMCAyNEwyOCAxNlYyOEgxMlYxNloiIGZpbGw9IiM5OTk5OTkiLz4KPGNpcmNsZSBjeD0iMTYiIGN5PSIyMCIgcj0iMiIgZmlsbD0iIzk5OTk5OSIvPgo8L3N2Zz4K'}
                             alt={item.product.name}
-                            className="w-12 h-12 rounded-lg object-cover bg-gray-200 dark:bg-slate-600"
+                            className="w-12 h-12 rounded-lg object-cover bg-gray-200 dark:bg-slate-600 group-hover:opacity-80 transition-opacity"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none'
                             }}
                           />
+                          {/* Small Enlarge Icon for Cart Items */}
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center rounded-lg">
+                            <div className="bg-white/90 backdrop-blur-sm rounded-full p-1 shadow-lg transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                              <svg className="w-3 h-3 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                              </svg>
+                            </div>
+                          </div>
                         </div>
                         
                         <div className="flex-1 min-w-0">

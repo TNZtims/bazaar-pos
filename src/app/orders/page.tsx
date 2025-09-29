@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Layout from '@/components/Layout'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import OrderEditModal from './OrderEditModal'
@@ -54,43 +54,11 @@ export default function OrdersPage() {
   
   // Real-time order updates via WebSocket
   const { 
-    isConnected: isWebSocketConnected,
-    error: webSocketError
+    isConnected: isWebSocketConnected
   } = useWebSocketInventory({
     storeId: store?.id || null,
     enabled: !!store?.id
   })
-  
-  // Custom WebSocket listener for order updates
-  useEffect(() => {
-    if (!store?.id || !isWebSocketConnected) return
-    
-    // Import socket.io-client dynamically
-    import('socket.io-client').then(({ io }) => {
-      const socket = io()
-      
-      // Join store-specific room
-      socket.emit('join-store', store.id)
-      
-      // Listen for new orders
-      socket.on('order-created', (data: any) => {
-        console.log('📋 Orders Page: New order received via WebSocket:', data)
-        
-        // Show notification
-        success(
-          `New order from ${data.customerName}: ₱${data.totalAmount.toFixed(2)} (${data.itemCount} items)`,
-          'New Order Received!'
-        )
-        
-        // Refresh orders list
-        fetchOrders()
-      })
-      
-      return () => {
-        socket.disconnect()
-      }
-    })
-  }, [store?.id, isWebSocketConnected, success])
   
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -106,6 +74,11 @@ export default function OrdersPage() {
   const [sortBy, setSortBy] = useState<'createdAt' | 'finalAmount' | 'customerName'>('createdAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [showFilters, setShowFilters] = useState(false)
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [totalOrders, setTotalOrders] = useState(0)
   const [paymentModal, setPaymentModal] = useState(false)
   const [orderEditModal, setOrderEditModal] = useState(false)
   const [confirmModal, setConfirmModal] = useState<{
@@ -133,10 +106,6 @@ export default function OrdersPage() {
     cashier: store?.selectedCashier || ''
   })
 
-  useEffect(() => {
-    fetchOrders()
-  }, [filterStatus, searchTerm, dateFrom, dateTo, sortBy, sortOrder])
-
   // Update payment data when store/cashier changes
   useEffect(() => {
     if (store?.selectedCashier) {
@@ -147,11 +116,13 @@ export default function OrdersPage() {
     }
   }, [store?.selectedCashier])
 
-  const fetchOrders = async () => {
+  // Define fetchOrders function before it's used in useEffect
+  const fetchOrders = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams()
-      params.append('limit', '100')
+      params.append('limit', itemsPerPage.toString())
+      params.append('page', currentPage.toString())
       
       if (filterStatus !== 'all') {
         params.append('paymentStatus', filterStatus)
@@ -176,16 +147,50 @@ export default function OrdersPage() {
       const response = await fetch(`/api/sales?${params}`)
       const data = await response.json()
       
-      // Show all orders, but you can filter by payment status using the dropdown
-      const allOrders = data.sales || []
-      
-      setOrders(allOrders)
+      setOrders(data.sales || [])
+      setTotalOrders(data.total || 0)
     } catch (error) {
       console.error('Error fetching orders:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [filterStatus, searchTerm, dateFrom, dateTo, sortBy, sortOrder, currentPage, itemsPerPage])
+
+  // Call fetchOrders when component mounts or dependencies change
+  useEffect(() => {
+    fetchOrders()
+  }, [fetchOrders])
+
+  // Custom WebSocket listener for order updates (after fetchOrders is defined)
+  useEffect(() => {
+    if (!store?.id || !isWebSocketConnected) return
+    
+    // Import socket.io-client dynamically
+    import('socket.io-client').then(({ io }) => {
+      const socket = io()
+      
+      // Join store-specific room
+      socket.emit('join-store', store.id)
+      
+      // Listen for new orders
+      socket.on('order-created', (data: { customerName: string; totalAmount: number; itemCount: number }) => {
+        console.log('📋 Orders Page: New order received via WebSocket:', data)
+        
+        // Show notification
+        success(
+          `New order from ${data.customerName}: ₱${data.totalAmount.toFixed(2)} (${data.itemCount} items)`,
+          'New Order Received!'
+        )
+        
+        // Refresh orders list
+        fetchOrders()
+      })
+      
+      return () => {
+        socket.disconnect()
+      }
+    })
+  }, [store?.id, isWebSocketConnected, success, fetchOrders])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -435,6 +440,25 @@ ${itemsList}
     setDateTo(monthEnd.toISOString().split('T')[0])
   }
 
+  // Pagination helpers
+  const totalPages = Math.ceil(totalOrders / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage + 1
+  const endIndex = Math.min(currentPage * itemsPerPage, totalOrders)
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage)
+    setCurrentPage(1) // Reset to first page when changing items per page
+  }
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filterStatus, searchTerm, dateFrom, dateTo, sortBy, sortOrder])
+
   return (
     <ProtectedRoute>
       <Layout>
@@ -450,16 +474,79 @@ ${itemsList}
           <div className="mt-4 sm:mt-0 flex flex-wrap gap-2">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors flex items-center gap-2"
             >
-              {showFilters ? 'Hide Filters' : 'Show Filters'}
+              {showFilters ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                  </svg>
+                  Hide Filters
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  Show Filters
+                </>
+              )}
             </button>
             <button
               onClick={clearFilters}
-              className="px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+              className="px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors flex items-center gap-2"
             >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
               Clear All
             </button>
+          </div>
+        </div>
+
+        {/* Modern Search Bar */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-4">
+          <div className="flex flex-col sm:flex-row gap-4 items-center">
+            <div className="flex-1 relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by customer name, order ID, or product name..."
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500 dark:placeholder-slate-400"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                >
+                  <svg className="h-5 w-5 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600 dark:text-slate-400">
+                {totalOrders > 0 ? `${startIndex}-${endIndex} of ${totalOrders}` : '0 orders'}
+              </span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value={5}>5 per page</option>
+                <option value={10}>10 per page</option>
+                <option value={25}>25 per page</option>
+                <option value={50}>50 per page</option>
+                <option value={100}>100 per page</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -467,19 +554,6 @@ ${itemsList}
         {showFilters && (
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Search */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                  Search Orders
-                </label>
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Customer name, order ID..."
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
 
               {/* Payment Status */}
               <div>
@@ -603,6 +677,9 @@ ${itemsList}
                         Order Details
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-300 uppercase tracking-wider">
+                        Products & Qty
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-300 uppercase tracking-wider">
                         Customer
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-300 uppercase tracking-wider">
@@ -630,6 +707,25 @@ ${itemsList}
                             <div className="font-medium">#{order._id.slice(-6)}</div>
                             <div className="text-gray-500 dark:text-slate-400">{formatDate(order.createdAt)}</div>
                             <div className="text-gray-500 dark:text-slate-400">{order.items.length} items</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-900 dark:text-slate-100 max-w-xs">
+                            {order.items.slice(0, 3).map((item, index) => (
+                              <div key={index} className="flex justify-between items-center py-1">
+                                <span className="truncate mr-2" title={item.productName}>
+                                  {item.productName}
+                                </span>
+                                <span className="text-blue-600 dark:text-blue-400 font-medium whitespace-nowrap">
+                                  ×{item.quantity}
+                                </span>
+                              </div>
+                            ))}
+                            {order.items.length > 3 && (
+                              <div className="text-gray-500 dark:text-slate-400 text-xs mt-1">
+                                +{order.items.length - 3} more items
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
@@ -772,6 +868,29 @@ ${itemsList}
                       <p className="text-sm text-gray-900 dark:text-slate-100">
                         Cashier: {order.cashier || 'N/A'}
                       </p>
+                      
+                      {/* Products Preview for Mobile */}
+                      <div className="text-sm text-gray-900 dark:text-slate-100">
+                        <p className="font-medium mb-1">Products:</p>
+                        <div className="space-y-1 pl-2">
+                          {order.items.slice(0, 2).map((item, index) => (
+                            <div key={index} className="flex justify-between items-center">
+                              <span className="truncate mr-2" title={item.productName}>
+                                {item.productName}
+                              </span>
+                              <span className="text-blue-600 dark:text-blue-400 font-medium whitespace-nowrap">
+                                ×{item.quantity}
+                              </span>
+                            </div>
+                          ))}
+                          {order.items.length > 2 && (
+                            <div className="text-gray-500 dark:text-slate-400 text-xs">
+                              +{order.items.length - 2} more items
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
                       <p className="text-sm text-gray-900 dark:text-slate-100">
                         Total: {formatCurrency(order.finalAmount)}
                       </p>
@@ -856,6 +975,86 @@ ${itemsList}
             </>
           )}
         </div>
+
+        {/* Modern Pagination */}
+        {totalOrders > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 px-6 py-4">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="text-sm text-gray-700 dark:text-slate-300">
+                Showing <span className="font-medium">{startIndex}</span> to <span className="font-medium">{endIndex}</span> of{' '}
+                <span className="font-medium">{totalOrders}</span> orders
+              </div>
+              
+              <div className="flex items-center gap-2">
+                {/* Previous Button */}
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Previous
+                </button>
+
+                {/* Page Numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => handlePageChange(pageNum)}
+                        className={`relative inline-flex items-center px-3 py-2 text-sm font-medium border rounded-md transition-colors ${
+                          currentPage === pageNum
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  
+                  {totalPages > 5 && currentPage < totalPages - 2 && (
+                    <>
+                      <span className="text-gray-500 dark:text-slate-400 px-2">...</span>
+                      <button
+                        onClick={() => handlePageChange(totalPages)}
+                        className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
+                      >
+                        {totalPages}
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* Next Button */}
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Order Details Modal */}
         {selectedOrder && !paymentModal && !orderEditModal && (
@@ -1047,7 +1246,7 @@ ${itemsList}
                     <div>
                       <h4 className="font-medium text-slate-100 mb-2">Payment History</h4>
                       <div className="space-y-2 max-h-32 overflow-y-auto">
-                        {selectedOrder.payments.map((payment: any, index: number) => (
+                        {selectedOrder.payments.map((payment: Payment, index: number) => (
                           <div key={index} className="flex justify-between items-center text-sm bg-slate-700 rounded p-2">
                             <div>
                               <span className="text-slate-100">{formatCurrency(payment.amount)}</span>
@@ -1144,7 +1343,7 @@ ${itemsList}
                       </label>
                       <select
                         value={paymentData.method}
-                        onChange={(e) => setPaymentData({ ...paymentData, method: e.target.value as any })}
+                        onChange={(e) => setPaymentData({ ...paymentData, method: e.target.value as 'cash' | 'card' | 'digital' })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                       >
                         <option value="cash">Cash</option>

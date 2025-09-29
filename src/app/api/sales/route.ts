@@ -69,18 +69,19 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Customer name or Order ID search
+    // Customer name, Order ID, or Product name search
     if (search) {
       // Try to search by Order ID first (if it looks like a MongoDB ObjectId)
       if (search.length === 24 && /^[0-9a-fA-F]{24}$/.test(search)) {
         query._id = search
       } else {
-        // Search by customer name, phone, or partial order ID
+        // Search by customer name, phone, email, partial order ID, or product name
         query.$or = [
           { customerName: { $regex: search, $options: 'i' } },
           { customerPhone: { $regex: search, $options: 'i' } },
           { customerEmail: { $regex: search, $options: 'i' } },
-          { _id: { $regex: search, $options: 'i' } } // Partial ID search
+          { _id: { $regex: search, $options: 'i' } }, // Partial ID search
+          { 'items.productName': { $regex: search, $options: 'i' } } // Product name search
         ]
       }
     }

@@ -280,7 +280,7 @@ export default function SalesPage() {
           customerPhone: cartData.customerPhone || '',
           customerEmail: cartData.customerEmail || '',
           notes: cartData.notes || '',
-          tax: cartData.tax || 0,
+          tax: 0, // Tax removed from checkout
           discount: cartData.discount || 0,
           paymentMethod: cartData.paymentMethod || 'cash',
           paymentStatus: cartData.paymentStatus || 'paid',
@@ -366,7 +366,7 @@ export default function SalesPage() {
       //   customerPhone: saleData.customerPhone,
       //   customerEmail: saleData.customerEmail,
       //   notes: saleData.notes,
-      //   tax: saleData.tax,
+      //   tax: 0, // Tax removed from checkout
       //   discount: saleData.discount,
       //   paymentMethod: saleData.paymentMethod,
       //   paymentStatus: saleData.paymentStatus,
@@ -386,7 +386,7 @@ export default function SalesPage() {
       //   customerPhone: saleData.customerPhone,
       //   customerEmail: saleData.customerEmail,
       //   notes: saleData.notes,
-      //   tax: saleData.tax,
+      //   tax: 0, // Tax removed from checkout
       //   discount: saleData.discount,
       //   paymentMethod: saleData.paymentMethod,
       //   paymentStatus: saleData.paymentStatus,
@@ -1009,7 +1009,7 @@ export default function SalesPage() {
 
   const calculateTotals = () => {
     const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0)
-    const total = subtotal + saleData.tax - saleData.discount
+    const total = subtotal - saleData.discount
     return { subtotal, total }
   }
 
@@ -1068,7 +1068,7 @@ export default function SalesPage() {
 
       const requestData = {
         items: saleItems,
-        tax: saleData.tax,
+        tax: 0, // Tax removed from checkout
         discount: saleData.discount,
         paymentMethod: saleData.paymentMethod,
         paymentStatus: saleData.paymentStatus,
@@ -1141,7 +1141,7 @@ export default function SalesPage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Sales & Checkout</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Create a Sale</h1>
               <div className="mt-1 flex items-center gap-4">
                 <p className="text-sm text-gray-600 dark:text-slate-400">Add products to cart and process sales</p>
                 {/* Real-time sync status - moved to left side under subtitle */}
@@ -1306,7 +1306,7 @@ export default function SalesPage() {
                 
                   {/* Product Image - Full Width at Top */}
                   <div 
-                    className="bg-slate-700 h-48 flex items-center justify-center overflow-hidden relative cursor-pointer hover:bg-slate-600 transition-colors"
+                    className="bg-slate-700 h-48 flex items-center justify-center overflow-hidden relative cursor-pointer hover:bg-slate-600 transition-colors group"
                     onClick={() => setSelectedImageProduct(product)}
                   >
                     {/* Stock Status Badge */}
@@ -1333,10 +1333,20 @@ export default function SalesPage() {
                         </span>
                       )}
                     </div>
+                    
+                    {/* Enlarge Icon - Shows on Hover */}
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-10">
+                      <div className="bg-white/90 backdrop-blur-sm rounded-full p-3 shadow-lg transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                        <svg className="w-6 h-6 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                        </svg>
+                      </div>
+                    </div>
+                    
                     <img
                       src={getProductImage(product)}
                       alt={product.name}
-                      className="max-w-full max-h-full object-contain rounded hover:opacity-80 transition-opacity pointer-events-none"
+                      className="max-w-full max-h-full object-contain rounded group-hover:opacity-80 transition-opacity pointer-events-none"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = '/images/products/default.svg'
                       }}
@@ -1660,17 +1670,7 @@ export default function SalesPage() {
 
                 {/* Checkout Form */}
                 <div className="border-t border-gray-200 dark:border-slate-600 pt-6 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Tax (₱)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={saleData.tax}
-                        onChange={(e) => setSaleData({ ...saleData, tax: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Discount (₱)</label>
                       <input
@@ -1685,7 +1685,7 @@ export default function SalesPage() {
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Payment</label>
                       <select
                         value={saleData.paymentStatus}
-                        onChange={(e) => setSaleData({ ...saleData, paymentStatus: e.target.value as any })}
+                        onChange={(e) => setSaleData({ ...saleData, paymentStatus: e.target.value as 'paid' | 'partial' | 'pending' })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="paid">Pay Full</option>

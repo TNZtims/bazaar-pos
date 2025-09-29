@@ -202,73 +202,49 @@ export default function ReportsPage() {
                 {recentSales.length === 0 ? (
                   <p className="text-gray-500 dark:text-slate-400 text-center py-8">No recent sales</p>
                 ) : (
-                  <div className="space-y-3">
-                    {recentSales.map((sale) => (
-                      <div key={sale._id} className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-white dark:bg-slate-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-slate-100">{formatCurrency(sale.finalAmount)}</p>
-                            <p className="text-sm text-gray-600 dark:text-slate-400">{formatDate(sale.createdAt)}</p>
+                  <div className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600 scrollbar-track-gray-100 dark:scrollbar-track-slate-700 pr-2">
+                    <div className="space-y-3">
+                      {recentSales.map((sale) => (
+                        <div key={sale._id} className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-white dark:bg-slate-700">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-slate-100">{formatCurrency(sale.finalAmount)}</p>
+                              <p className="text-sm text-gray-600 dark:text-slate-400">{formatDate(sale.createdAt)}</p>
+                            </div>
+                            <div className="text-right">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                sale.paymentMethod === 'cash' 
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                                  : sale.paymentMethod === 'card'
+                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400'
+                                  : 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400'
+                              }`}>
+                                {sale.paymentMethod}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              sale.paymentMethod === 'cash' 
-                                ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
-                                : sale.paymentMethod === 'card'
-                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400'
-                                : 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400'
-                            }`}>
-                              {sale.paymentMethod}
-                            </span>
+                          
+                          {sale.customerName && (
+                            <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">Customer: {sale.customerName}</p>
+                          )}
+                          
+                          <div className="text-sm text-gray-600 dark:text-slate-400">
+                            <p className="font-medium">Items:</p>
+                            <ul className="list-disc list-inside ml-2 space-y-1">
+                              {sale.items.map((item, index) => (
+                                <li key={index}>
+                                  {item.quantity}x {item.productName} - {formatCurrency(item.totalPrice)}
+                                </li>
+                              ))}
+                            </ul>
                           </div>
                         </div>
-                        
-                        {sale.customerName && (
-                          <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">Customer: {sale.customerName}</p>
-                        )}
-                        
-                        <div className="text-sm text-gray-600 dark:text-slate-400">
-                          <p className="font-medium">Items:</p>
-                          <ul className="list-disc list-inside ml-2 space-y-1">
-                            {sale.items.map((item, index) => (
-                              <li key={index}>
-                                {item.quantity}x {item.productName} - {formatCurrency(item.totalPrice)}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
-
-            {/* Daily Sales Detail */}
-            {dailyReport && dailyReport.totalSales > 0 && (
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">
-                  Daily Sales Summary for {selectedDate}
-                </h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{dailyReport.totalSales}</div>
-                    <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">Total Transactions</div>
-                  </div>
-                  
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-green-600 dark:text-green-400">{formatCurrency(dailyReport.totalRevenue)}</div>
-                    <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">Total Revenue</div>
-                  </div>
-                  
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">{formatCurrency(dailyReport.averageOrderValue)}</div>
-                    <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">Average Order Value</div>
-                  </div>
-                </div>
-              </div>
-            )}
           </>
         )}
       </div>

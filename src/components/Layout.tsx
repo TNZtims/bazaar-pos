@@ -87,7 +87,7 @@ const Layout = ({ children }: LayoutProps) => {
   const navigation = [
     { name: 'Dashboard', href: '/', icon: '🏠', gradient: 'from-blue-500 to-purple-600' },
     { name: 'Products', href: '/products', icon: '📦', gradient: 'from-green-500 to-teal-600' },
-    { name: 'Sales', href: '/sales', icon: '💰', gradient: 'from-yellow-500 to-orange-600' },
+    { name: 'Create a Sale', href: '/sales', icon: '💰', gradient: 'from-yellow-500 to-orange-600' },
     { name: 'Orders', href: '/orders', icon: '📋', gradient: 'from-purple-500 to-indigo-600' },
     { name: 'Users', href: '/users', icon: '👥', gradient: 'from-cyan-500 to-blue-600' },
     { name: 'Cashiers', href: '/cashiers', icon: '💼', gradient: 'from-emerald-500 to-teal-600' },
