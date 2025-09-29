@@ -27,7 +27,7 @@ export async function GET(
     const store = await Store.findOne({ 
       storeName: { $regex: new RegExp(`^${decodedStoreName}$`, 'i') },
       isActive: true 
-    }).select('_id storeName isOnline storeHours isActive isLocked bannerImageUrl logoImageUrl')
+    }).select('_id storeName isOnline storeHours isActive isLocked bannerImageUrl logoImageUrl qrCodes')
 
     if (!store) {
       return NextResponse.json(
@@ -51,7 +51,8 @@ export async function GET(
       accessible: !store.isLocked, // true if store is open to public, false if closed
       message: store.isLocked ? 'Store is currently closed to public access' : 'Store is open',
       bannerImageUrl: store.bannerImageUrl,
-      logoImageUrl: store.logoImageUrl
+      logoImageUrl: store.logoImageUrl,
+      qrCodes: store.qrCodes
     })
   } catch (error: any) {
     console.error('Error resolving store name:', error)

@@ -11,6 +11,11 @@ export interface IStore extends Document {
   isLocked: boolean
   bannerImageUrl?: string
   logoImageUrl?: string
+  qrCodes?: {
+    gcash?: string
+    gotyme?: string
+    bpi?: string
+  }
   createdAt: Date
   updatedAt: Date
   
@@ -80,6 +85,23 @@ const storeSchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: null
+  },
+  qrCodes: {
+    gcash: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    gotyme: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    bpi: {
+      type: String,
+      trim: true,
+      default: null
+    }
   }
 }, {
   timestamps: true

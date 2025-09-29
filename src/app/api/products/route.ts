@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '20')
+    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : null // No default limit - show all products
     const search = searchParams.get('search')
     const category = searchParams.get('category')
     const preorderOnly = searchParams.get('preorderOnly') === 'true'
@@ -104,10 +104,14 @@ export async function GET(request: NextRequest) {
       query.availableForPreorder = true
     }
     
-    const products = await Product.find(query)
-      .limit(limit)
-      .skip((page - 1) * limit)
-      .sort({ createdAt: -1 })
+    let productQuery = Product.find(query).sort({ createdAt: -1 })
+    
+    // Only apply pagination if limit is specified
+    if (limit) {
+      productQuery = productQuery.limit(limit).skip((page - 1) * limit)
+    }
+    
+    const products = await productQuery
     
     const total = await Product.countDocuments(query)
     
@@ -154,7 +158,7 @@ export async function GET(request: NextRequest) {
     
     const response = NextResponse.json({
       products: productsWithAvailability,
-      totalPages: Math.ceil(total / limit),
+      totalPages: limit ? Math.ceil(total / limit) : 1,
       currentPage: page,
       total
     })

@@ -43,8 +43,22 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024
 // Generate secure file name with UUID
 export function generateSecureFileName(originalName: string): string {
   const fileExtension = originalName.split('.').pop()?.toLowerCase()
-  if (!fileExtension || !ALLOWED_FILE_TYPES.includes(`image/${fileExtension}`)) {
-    throw new Error('Invalid file type')
+  if (!fileExtension) {
+    throw new Error('File must have an extension')
+  }
+  
+  // Map common extensions to MIME types
+  const extensionToMime: { [key: string]: string } = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'webp': 'image/webp',
+    'gif': 'image/gif'
+  }
+  
+  const mimeType = extensionToMime[fileExtension]
+  if (!mimeType || !ALLOWED_FILE_TYPES.includes(mimeType)) {
+    throw new Error('Invalid file type. Only JPEG, PNG, WebP, and GIF images are allowed.')
   }
   
   const timestamp = Date.now()
@@ -53,7 +67,7 @@ export function generateSecureFileName(originalName: string): string {
 }
 
 // Validate file before upload
-export function validateImageFile(file: File): { valid: boolean; error?: string } {
+export function validateImageFile(file: File): { valid: boolean; error?: string; cleanFileName?: string } {
   // Check file type
   if (!ALLOWED_FILE_TYPES.includes(file.type)) {
     return {
@@ -70,15 +84,63 @@ export function validateImageFile(file: File): { valid: boolean; error?: string 
     }
   }
 
-  // Check file name for security
-  if (file.name.includes('..') || file.name.includes('/') || file.name.includes('\\')) {
+  // Clean the file name by removing path separators and keeping only the filename
+  const cleanFileName = file.name.split(/[/\\]/).pop() || file.name
+  console.log('File validation:', { 
+    originalName: file.name, 
+    cleanedName: cleanFileName, 
+    type: file.type, 
+    size: file.size 
+  })
+  
+  // Check for path traversal attempts in the cleaned name
+  if (cleanFileName.includes('..')) {
+    console.error('File name validation failed - path traversal detected:', cleanFileName)
     return {
       valid: false,
-      error: 'Invalid file name.'
+      error: `Invalid file name "${cleanFileName}". File names cannot contain path traversal sequences (..).`
     }
   }
 
-  return { valid: true }
+  // Check if file has a valid extension using the cleaned name
+  const fileExtension = cleanFileName.split('.').pop()?.toLowerCase()
+  if (!fileExtension) {
+    return {
+      valid: false,
+      error: 'File must have an extension.'
+    }
+  }
+
+  // Validate extension matches MIME type
+  const extensionToMime: { [key: string]: string } = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'webp': 'image/webp',
+    'gif': 'image/gif'
+  }
+  
+  const expectedMimeType = extensionToMime[fileExtension]
+  if (!expectedMimeType) {
+    return {
+      valid: false,
+      error: 'Invalid file extension. Only .jpg, .jpeg, .png, .webp, and .gif files are allowed.'
+    }
+  }
+
+  // Allow both the expected MIME type and the actual file MIME type
+  // Some browsers may report different MIME types
+  if (file.type !== expectedMimeType && !ALLOWED_FILE_TYPES.includes(file.type)) {
+    return {
+      valid: false,
+      error: 'File type does not match extension or is not supported.'
+    }
+  }
+
+  return { 
+    valid: true, 
+    cleanFileName: cleanFileName 
+  }
 }
 
 // Generate presigned URL for secure upload

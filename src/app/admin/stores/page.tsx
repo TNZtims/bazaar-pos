@@ -17,6 +17,11 @@ interface Store {
   isLocked: boolean
   bannerImageUrl?: string
   logoImageUrl?: string
+  qrCodes?: {
+    gcash?: string
+    gotyme?: string
+    bpi?: string
+  }
   storeHours: {
     monday: { open: string, close: string, closed: boolean }
     tuesday: { open: string, close: string, closed: boolean }
@@ -46,13 +51,23 @@ export default function AdminStoresPage() {
     isAdmin: false,
     cashiers: '',
     bannerImageUrl: '',
-    logoImageUrl: ''
+    logoImageUrl: '',
+    qrCodes: {
+      gcash: '',
+      gotyme: '',
+      bpi: ''
+    }
   })
   const [isCreating, setIsCreating] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
   const [togglingStore, setTogglingStore] = useState<string | null>(null)
   const [uploadingBanner, setUploadingBanner] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [uploadingQRCodes, setUploadingQRCodes] = useState({
+    gcash: false,
+    gotyme: false,
+    bpi: false
+  })
 
   // Redirect if not admin
   useEffect(() => {
@@ -140,6 +155,7 @@ export default function AdminStoresPage() {
     console.log('Opening edit modal for store:', store) // Debug log
     console.log('Store banner URL:', store.bannerImageUrl) // Debug log
     console.log('Store logo URL:', store.logoImageUrl) // Debug log
+    console.log('Store QR codes:', store.qrCodes) // Debug log
     
     setEditingStore(store)
     const formDataToSet = {
@@ -149,7 +165,12 @@ export default function AdminStoresPage() {
       isAdmin: store.isAdmin,
       cashiers: store.cashiers.join(', '),
       bannerImageUrl: store.bannerImageUrl || '',
-      logoImageUrl: store.logoImageUrl || ''
+      logoImageUrl: store.logoImageUrl || '',
+      qrCodes: {
+        gcash: store.qrCodes?.gcash || '',
+        gotyme: store.qrCodes?.gotyme || '',
+        bpi: store.qrCodes?.bpi || ''
+      }
     }
     console.log('Setting form data:', formDataToSet) // Debug log
     setFormData(formDataToSet)
@@ -187,7 +208,8 @@ export default function AdminStoresPage() {
         isAdmin: formData.isAdmin,
         cashiers: formData.cashiers.split(',').map(c => c.trim()).filter(c => c),
         bannerImageUrl: formData.bannerImageUrl,
-        logoImageUrl: formData.logoImageUrl
+        logoImageUrl: formData.logoImageUrl,
+        qrCodes: formData.qrCodes
       }
       
       console.log('Sending update data:', updateData) // Debug log
@@ -289,6 +311,78 @@ export default function AdminStoresPage() {
     }
   }
 
+  const handleQRCodeUpload = async (file: File, type: 'gcash' | 'gotyme' | 'bpi') => {
+    setUploadingQRCodes(prev => ({ ...prev, [type]: true }))
+    
+    try {
+      // Create form data for file upload
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', type)
+
+      // Upload to our MongoDB-based API
+      const uploadResponse = await fetch('/api/stores/qr-codes', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json()
+        throw new Error(errorData.message || 'Failed to upload QR code')
+      }
+
+      const { qrCodeUrl } = await uploadResponse.json()
+
+      // Update form data with the QR code data URL
+      setFormData(prev => ({
+        ...prev,
+        qrCodes: {
+          ...prev.qrCodes,
+          [type]: qrCodeUrl
+        }
+      }))
+
+      success(`${type.toUpperCase()} QR code uploaded successfully!`)
+      
+    } catch (err: any) {
+      error(`Failed to upload ${type.toUpperCase()} QR code: ${err.message}`)
+    } finally {
+      setUploadingQRCodes(prev => ({ ...prev, [type]: false }))
+    }
+  }
+
+  const handleQRCodeRemove = async (type: 'gcash' | 'gotyme' | 'bpi') => {
+    setUploadingQRCodes(prev => ({ ...prev, [type]: true }))
+    
+    try {
+      // Remove QR code from database
+      const removeResponse = await fetch(`/api/stores/qr-codes?type=${type}`, {
+        method: 'DELETE'
+      })
+
+      if (!removeResponse.ok) {
+        const errorData = await removeResponse.json()
+        throw new Error(errorData.message || 'Failed to remove QR code')
+      }
+
+      // Update form data to remove the QR code
+      setFormData(prev => ({
+        ...prev,
+        qrCodes: {
+          ...prev.qrCodes,
+          [type]: ''
+        }
+      }))
+
+      success(`${type.toUpperCase()} QR code removed successfully!`)
+      
+    } catch (err: any) {
+      error(`Failed to remove ${type.toUpperCase()} QR code: ${err.message}`)
+    } finally {
+      setUploadingQRCodes(prev => ({ ...prev, [type]: false }))
+    }
+  }
+
   const resetForm = () => {
     setFormData({
       storeName: '',
@@ -297,7 +391,12 @@ export default function AdminStoresPage() {
       isAdmin: false,
       cashiers: '',
       bannerImageUrl: '',
-      logoImageUrl: ''
+      logoImageUrl: '',
+      qrCodes: {
+        gcash: '',
+        gotyme: '',
+        bpi: ''
+      }
     })
   }
 
@@ -825,6 +924,193 @@ export default function AdminStoresPage() {
                       {uploadingLogo && (
                         <p className="text-sm text-blue-600 dark:text-blue-400">Uploading logo...</p>
                       )}
+                    </div>
+                  </div>
+
+                  {/* QR Code Upload Section */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-slate-100 border-b border-gray-200 dark:border-slate-600 pb-2">
+                      Payment QR Codes
+                    </h3>
+                    
+                    {/* GCash QR Code */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                        GCash QR Code
+                      </label>
+                      <div className="space-y-2">
+                        {formData.qrCodes.gcash && (
+                          <div className="relative inline-block">
+                            <img 
+                              src={formData.qrCodes.gcash} 
+                              alt="GCash QR Code" 
+                              className="w-32 h-32 object-cover rounded-md border border-gray-300 dark:border-slate-600"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleQRCodeRemove('gcash')}
+                              disabled={uploadingQRCodes.gcash}
+                              className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                            <div className="absolute bottom-1 left-1 bg-blue-600/80 text-white text-xs px-2 py-1 rounded">
+                              GCash
+                            </div>
+                          </div>
+                        )}
+                        {!formData.qrCodes.gcash && (
+                          <div className="border-2 border-dashed border-blue-300 dark:border-blue-600 rounded-md w-32 h-32 flex items-center justify-center">
+                            <div className="text-center">
+                              <svg className="w-8 h-8 text-blue-400 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 011-1h2m0 0V4a1 1 0 011-1h1m0 0h2a1 1 0 011 1v1M9 7h1m4 0h1m-5.01 0h.01M12 9v.01" />
+                              </svg>
+                              <p className="text-xs text-blue-500">GCash QR</p>
+                            </div>
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleQRCodeUpload(file, 'gcash')
+                          }}
+                          disabled={uploadingQRCodes.gcash}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
+                        {uploadingQRCodes.gcash && (
+                          <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
+                            <svg className="w-4 h-4 animate-spin inline mr-2" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Uploading GCash QR code...
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* GoTyme QR Code */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                        GoTyme QR Code
+                      </label>
+                      <div className="space-y-2">
+                        {formData.qrCodes.gotyme && (
+                          <div className="relative inline-block">
+                            <img 
+                              src={formData.qrCodes.gotyme} 
+                              alt="GoTyme QR Code" 
+                              className="w-32 h-32 object-cover rounded-md border border-gray-300 dark:border-slate-600"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleQRCodeRemove('gotyme')}
+                              disabled={uploadingQRCodes.gotyme}
+                              className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                            <div className="absolute bottom-1 left-1 bg-green-600/80 text-white text-xs px-2 py-1 rounded">
+                              GoTyme
+                            </div>
+                          </div>
+                        )}
+                        {!formData.qrCodes.gotyme && (
+                          <div className="border-2 border-dashed border-green-300 dark:border-green-600 rounded-md w-32 h-32 flex items-center justify-center">
+                            <div className="text-center">
+                              <svg className="w-8 h-8 text-green-400 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 011-1h2m0 0V4a1 1 0 011-1h1m0 0h2a1 1 0 011 1v1M9 7h1m4 0h1m-5.01 0h.01M12 9v.01" />
+                              </svg>
+                              <p className="text-xs text-green-500">GoTyme QR</p>
+                            </div>
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleQRCodeUpload(file, 'gotyme')
+                          }}
+                          disabled={uploadingQRCodes.gotyme}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
+                        {uploadingQRCodes.gotyme && (
+                          <p className="text-sm text-green-600 dark:text-green-400 mt-2">
+                            <svg className="w-4 h-4 animate-spin inline mr-2" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Uploading GoTyme QR code...
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* BPI QR Code */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                        BPI QR Code
+                      </label>
+                      <div className="space-y-2">
+                        {formData.qrCodes.bpi && (
+                          <div className="relative inline-block">
+                            <img 
+                              src={formData.qrCodes.bpi} 
+                              alt="BPI QR Code" 
+                              className="w-32 h-32 object-cover rounded-md border border-gray-300 dark:border-slate-600"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleQRCodeRemove('bpi')}
+                              disabled={uploadingQRCodes.bpi}
+                              className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                            <div className="absolute bottom-1 left-1 bg-red-600/80 text-white text-xs px-2 py-1 rounded">
+                              BPI
+                            </div>
+                          </div>
+                        )}
+                        {!formData.qrCodes.bpi && (
+                          <div className="border-2 border-dashed border-red-300 dark:border-red-600 rounded-md w-32 h-32 flex items-center justify-center">
+                            <div className="text-center">
+                              <svg className="w-8 h-8 text-red-400 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 011-1h2m0 0V4a1 1 0 011-1h1m0 0h2a1 1 0 011 1v1M9 7h1m4 0h1m-5.01 0h.01M12 9v.01" />
+                              </svg>
+                              <p className="text-xs text-red-500">BPI QR</p>
+                            </div>
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleQRCodeUpload(file, 'bpi')
+                          }}
+                          disabled={uploadingQRCodes.bpi}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-50 file:text-red-700 hover:file:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
+                        {uploadingQRCodes.bpi && (
+                          <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+                            <svg className="w-4 h-4 animate-spin inline mr-2" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Uploading BPI QR code...
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
 

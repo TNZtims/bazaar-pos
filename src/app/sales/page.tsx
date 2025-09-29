@@ -40,10 +40,8 @@ export default function SalesPage() {
   const [newProductIds, setNewProductIds] = useState<Set<string>>(new Set())
   const [newProductsToNotify, setNewProductsToNotify] = useState<any[]>([])
   const [notifiedProductIds, setNotifiedProductIds] = useState<Set<string>>(new Set())
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
+  // Removed pagination - showing all products
   const [totalProducts, setTotalProducts] = useState(0)
-  const [productsPerPage] = useState(20) // 4 rows × 5 columns = 20 products per page
   const [processing, setProcessing] = useState(false)
   const [selectedCashier, setSelectedCashier] = useState(store?.selectedCashier || '')
   const [cartModalOpen, setCartModalOpen] = useState(false)
@@ -204,17 +202,10 @@ export default function SalesPage() {
   })
 
   useEffect(() => {
-    setCurrentPage(1) // Reset to first page when search changes
     if (store?.id) {
       fetchProducts()
     }
-  }, [searchTerm]) // Only depend on searchTerm, store changes are handled in main effect
-
-  useEffect(() => {
-    if (store?.id) {
-      fetchProducts()
-    }
-  }, [currentPage]) // Only depend on currentPage, store changes are handled in main effect
+  }, [searchTerm]) // Fetch products when search changes
 
   // Cart API functions
   const loadCartFromAPI = async () => {
@@ -620,7 +611,6 @@ export default function SalesPage() {
       setCart([])
       setSelectedQuantities({})
       setSearchTerm('')
-      setCurrentPage(1)
       setCartLoaded(false)
       setAddingToCart(null) // Reset any ongoing operations
       setProcessing(false) // Reset processing state
@@ -783,8 +773,7 @@ export default function SalesPage() {
       setLoading(true)
       const params = new URLSearchParams()
       if (searchTerm) params.append('search', searchTerm)
-      params.append('page', currentPage.toString())
-      params.append('limit', productsPerPage.toString())
+      // Removed pagination - fetch all products
       params.append('includeCart', 'true') // Include cart data for accurate availability
       
       // Add cache-busting timestamp to force fresh data from MongoDB
@@ -825,7 +814,6 @@ export default function SalesPage() {
       }
       
       setProducts(data.products || [])
-      setTotalPages(data.totalPages || 1)
       setTotalProducts(data.total || 0)
     } catch (error) {
       // Only log error if we're still on the same store
@@ -1277,7 +1265,14 @@ export default function SalesPage() {
             <>
               {/* Products Grid - Modern Dark Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 p-8">
-              {products.map((product) => {
+              {products
+                .sort((a, b) => {
+                  // Sort by stock status: stocked items first, then out-of-stock
+                  const aInStock = getActualAvailableQuantity(a) > 0 ? 1 : 0
+                  const bInStock = getActualAvailableQuantity(b) > 0 ? 1 : 0
+                  return bInStock - aInStock // Descending order (1 before 0)
+                })
+                .map((product) => {
                 const isOutOfStock = getActualAvailableQuantity(product) === 0
                 
                 return (
@@ -1494,93 +1489,11 @@ export default function SalesPage() {
               })}
               </div>
 
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
+              {/* Product Count Info */}
+              {totalProducts > 0 && (
                 <div className="border-t border-gray-200 dark:border-slate-600 px-4 py-4">
-                  <div className="flex items-center justify-between">
-                    {/* Page Info */}
-                    <div className="text-sm text-gray-600 dark:text-slate-400">
-                      Showing {((currentPage - 1) * productsPerPage) + 1} to {Math.min(currentPage * productsPerPage, totalProducts)} of {totalProducts} products
-                    </div>
-                    
-                    {/* Pagination Buttons */}
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setCurrentPage(1)}
-                        disabled={currentPage === 1}
-                        className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="First page"
-                      >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      
-                      <button
-                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                        disabled={currentPage === 1}
-                        className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Previous page"
-                      >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      
-                      {/* Page Numbers */}
-                      <div className="flex items-center gap-1">
-                        {(() => {
-                          const pages = []
-                          const maxVisiblePages = 5
-                          let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
-                          let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
-                          
-                          // Adjust start page if we're near the end
-                          if (endPage - startPage + 1 < maxVisiblePages) {
-                            startPage = Math.max(1, endPage - maxVisiblePages + 1)
-                          }
-                          
-                          for (let i = startPage; i <= endPage; i++) {
-                            pages.push(
-                              <button
-                                key={i}
-                                onClick={() => setCurrentPage(i)}
-                                className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                                  i === currentPage
-                                    ? 'bg-blue-600 text-white'
-                                    : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
-                                }`}
-                              >
-                                {i}
-                              </button>
-                            )
-                          }
-                          return pages
-                        })()}
-                      </div>
-                      
-                      <button
-                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Next page"
-                      >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                      
-                      <button
-                        onClick={() => setCurrentPage(totalPages)}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Last page"
-                      >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </div>
+                  <div className="text-sm text-gray-600 dark:text-slate-400 text-center">
+                    Showing all {totalProducts} products
                   </div>
                 </div>
               )}

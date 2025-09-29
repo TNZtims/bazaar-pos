@@ -24,7 +24,7 @@ export async function GET(
     const store = await Store.findOne({ 
       _id: id, 
       isActive: true 
-    }).select('storeName _id isOnline storeHours isActive bannerImageUrl logoImageUrl')
+    }).select('storeName _id isOnline storeHours isActive bannerImageUrl logoImageUrl qrCodes')
 
     if (!store) {
       return NextResponse.json(
@@ -41,7 +41,8 @@ export async function GET(
       name: store.storeName,
       status: storeStatus,
       bannerImageUrl: store.bannerImageUrl,
-      logoImageUrl: store.logoImageUrl
+      logoImageUrl: store.logoImageUrl,
+      qrCodes: store.qrCodes
     })
   } catch (error: any) {
     console.error('Error fetching store:', error)

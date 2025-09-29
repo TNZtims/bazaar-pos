@@ -66,8 +66,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Use cleaned filename if available
+    const finalFileName = validation.cleanFileName || fileName
+
     // Generate presigned URL
-    const uploadData = await getPresignedUploadUrl(fileName, fileType)
+    const uploadData = await getPresignedUploadUrl(finalFileName, fileType)
 
     return NextResponse.json({
       success: true,

@@ -148,6 +148,17 @@
   }
 }
 
+@keyframes pulseNotification {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1);
+  }
+}
+
 @keyframes shimmer {
   0% {
     background-position: -200px 0;
@@ -167,6 +178,10 @@
 
 .animate-pulse-custom {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-pulse-notification {
+  animation: pulseNotification 1s ease-in-out infinite;
 }
 
 .shimmer {

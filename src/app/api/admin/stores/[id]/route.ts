@@ -120,7 +120,7 @@ export async function PUT(
     
     const { id } = await params
     const body = await request.json()
-    const { storeName, password, isAdmin, cashiers, isOnline, storeHours, bannerImageUrl, logoImageUrl } = body
+    const { storeName, password, isAdmin, cashiers, isOnline, storeHours, bannerImageUrl, logoImageUrl, qrCodes } = body
     
     if (!storeName) {
       return NextResponse.json(
@@ -165,6 +165,15 @@ export async function PUT(
       // Handle empty strings and null values properly  
       updateData.logoImageUrl = (logoImageUrl && logoImageUrl.trim() !== '') ? logoImageUrl : null
       // console.log('Setting logo image URL:', logoImageUrl, '-> processed:', updateData.logoImageUrl) // Debug log
+    }
+
+    // Handle QR codes if provided
+    if (qrCodes && typeof qrCodes === 'object') {
+      updateData.qrCodes = {
+        gcash: (qrCodes.gcash && qrCodes.gcash.trim() !== '') ? qrCodes.gcash : null,
+        gotyme: (qrCodes.gotyme && qrCodes.gotyme.trim() !== '') ? qrCodes.gotyme : null,
+        bpi: (qrCodes.bpi && qrCodes.bpi.trim() !== '') ? qrCodes.bpi : null
+      }
     }
     
     // console.log('Final updateData:', updateData) // Debug log
@@ -246,6 +255,7 @@ export async function PUT(
       storeHours: updatedStore.storeHours,
       bannerImageUrl: updatedStore.bannerImageUrl,
       logoImageUrl: updatedStore.logoImageUrl,
+      qrCodes: updatedStore.qrCodes,
       createdAt: updatedStore.createdAt,
       updatedAt: updatedStore.updatedAt
     }

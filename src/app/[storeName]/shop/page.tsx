@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useWebSocketInventory } from '@/hooks/useWebSocketInventory'
+import QRCodeModal from '@/components/QRCodeModal'
 
 interface Product {
   _id: string
@@ -40,6 +41,11 @@ interface Store {
   status?: StoreStatus
   bannerImageUrl?: string
   logoImageUrl?: string
+  qrCodes?: {
+    gcash?: string
+    gotyme?: string
+    bpi?: string
+  }
 }
 
 /**
@@ -81,10 +87,12 @@ export default function PublicShopPage() {
   const [activeTab, setActiveTab] = useState<'shop' | 'preorder'>('shop')
   const [activeCartTab, setActiveCartTab] = useState<'cart' | 'confirmed'>('cart')
   const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
+  const [shouldPulsePreorder, setShouldPulsePreorder] = useState(false)
   const [storeId, setStoreId] = useState<string | null>(null)
   const [userHasInteracted, setUserHasInteracted] = useState(false)
   const [storeClosed, setStoreClosed] = useState(false)
   const [selectedImageProduct, setSelectedImageProduct] = useState<Product | null>(null)
+  const [showQRCodeModal, setShowQRCodeModal] = useState(false)
 
   // Close modal on Escape key
   useEffect(() => {
@@ -121,6 +129,7 @@ export default function PublicShopPage() {
   // Apply real-time inventory updates to products
   useEffect(() => {
     if (inventoryUpdates.length > 0) {
+      console.log(`🔄 Processing ${inventoryUpdates.length} inventory updates`);
       // Track which products are being updated for animation
       const updatedIds = new Set<string>()
       const newIds = new Set<string>()
@@ -229,7 +238,8 @@ export default function PublicShopPage() {
           name: data.name, 
           status: data.status,
           bannerImageUrl: data.bannerImageUrl,
-          logoImageUrl: data.logoImageUrl
+          logoImageUrl: data.logoImageUrl,
+          qrCodes: data.qrCodes
         }
         setStore(storeData)
         setStoreStatus(data.status)
@@ -237,6 +247,7 @@ export default function PublicShopPage() {
         setStoreClosed(false) // Store is open
         
         console.log(`🏪 Frontend: Store info loaded for ${storeName} → ID: ${data.id}`)
+        console.log('🎯 QR Codes loaded:', data.qrCodes)
       } else {
         setError('Store not found')
         setStoreClosed(true)
@@ -498,7 +509,7 @@ export default function PublicShopPage() {
     setError('')
     setStoreClosed(false)
     setLoading(true)
-    setProducts([])
+    // Don't clear products immediately - let fetchProducts handle it
     setStoreId(null) // Reset store ID to force fresh data
     
     console.log(`🔄 Store switching: Resetting state for ${storeName}`)
@@ -568,6 +579,14 @@ export default function PublicShopPage() {
         return
       }
       
+      // Don't fetch if we don't have a storeName
+      if (!storeName) {
+        setLoading(false)
+        return
+      }
+      
+      console.log(`🔄 Fetching products for store: ${storeName}`)
+      
       try {
         // Use store name for public access if user is not authenticated
         // Include cart data for authenticated users to get proper availability calculations
@@ -580,6 +599,8 @@ export default function PublicShopPage() {
           ? `${apiUrl}&_t=${Date.now()}`
           : `${apiUrl}?_t=${Date.now()}`
         
+        console.log(`📡 API Call: ${cacheBustUrl}`)
+        
         const response = await fetch(cacheBustUrl, {
           credentials: 'include',
           cache: 'no-cache',
@@ -589,12 +610,21 @@ export default function PublicShopPage() {
           }
         })
         
+        console.log(`📡 API Response: ${response.status} ${response.statusText}`)
+        
         if (response.ok) {
           const data = await response.json()
           const newProducts = data.products || []
           console.log(`🛍️ Frontend: Loaded ${newProducts.length} products for store ${storeName}`)
           console.log('🔍 Products with quantities:', newProducts.map((p: any) => ({ name: p.name, quantity: p.quantity, available: p.quantity || 0 })))
-          setProducts(newProducts)
+          
+          // Only update products if we actually got data
+          if (Array.isArray(newProducts)) {
+            setProducts(newProducts)
+            console.log(`✅ Products state updated with ${newProducts.length} items`)
+          } else {
+            console.warn('⚠️ API returned non-array products data:', data)
+          }
         } else if (response.status === 403) {
           const errorData = await response.json()
           setError(errorData.message || 'Store is currently closed to public access')
@@ -611,8 +641,11 @@ export default function PublicShopPage() {
       }
     }
     
-    fetchProducts()
-  }, [user, storeId, storeName, storeClosed])
+    // Only fetch if we have the basic requirements
+    if (storeName && !storeClosed && !error) {
+      fetchProducts()
+    }
+  }, [user, storeName, storeClosed, error])
 
   // Refresh products function (called after order confirmation)
   const refreshProducts = async () => {
@@ -754,6 +787,10 @@ export default function PublicShopPage() {
             : [...prevCart, { product, quantity: quantity }]
           return newCart
         })
+        
+        // Trigger pulse animation for preorder tab
+        setShouldPulsePreorder(true)
+        setTimeout(() => setShouldPulsePreorder(false), 3000) // Stop pulsing after 3 seconds
       } else {
         // Update regular cart and persist to MongoDB
       setCart(prevCart => {
@@ -1310,29 +1347,6 @@ export default function PublicShopPage() {
           }
         }
         
-        // Add the order to confirmed reservations
-        const newReservation = {
-          id: orderId,
-          items: currentCart.map(item => ({
-            productName: item.product.name,
-            productImage: item.product.imageUrl,
-            quantity: item.quantity,
-            unitPrice: item.product.price,
-            totalPrice: item.product.price * item.quantity
-          })),
-          totalAmount: getTotalAmount(),
-          status: 'pending',
-          approvalStatus: 'pending',
-          paymentStatus: 'pending',
-          amountPaid: 0,
-          amountDue: getTotalAmount(),
-          payments: [],
-          createdAt: new Date().toISOString()
-        }
-        
-        // console.log('✅ Adding confirmed reservation to local state:', newReservation)
-        setConfirmedReservations(prev => [newReservation, ...prev])
-        
         // Clear cart and localStorage
         if (activeTab === 'preorder') {
           setPreorderCart([])
@@ -1346,7 +1360,7 @@ export default function PublicShopPage() {
         // Refresh products to show updated availability
         await refreshProducts()
         
-        // Reload confirmed reservations to ensure database sync
+        // Reload confirmed reservations from server (no local state addition to avoid duplicates)
         setTimeout(() => {
           loadConfirmedReservations()
         }, 1000) // Small delay to ensure database write is complete
@@ -1389,6 +1403,18 @@ export default function PublicShopPage() {
       // Out of stock products will be styled as disabled but still visible
       return matchesSearch
     }
+  }).sort((a, b) => {
+    // Sort by stock status: stocked items first, then out-of-stock items
+    const aInStock = (a.quantity || 0) > 0
+    const bInStock = (b.quantity || 0) > 0
+    
+    // If both have same stock status, maintain original order
+    if (aInStock === bInStock) {
+      return 0
+    }
+    
+    // In-stock items come first (return -1 if a is in stock and b is not)
+    return aInStock ? -1 : 1
   })
 
   // Debug logging
@@ -1397,6 +1423,7 @@ export default function PublicShopPage() {
   console.log('🔍 Debug - Out of stock products:', products.filter((p: any) => (p.quantity || 0) === 0).map((p: any) => ({ name: p.name, quantity: p.quantity })))
   console.log('🔍 Debug - Active tab:', activeTab)
   console.log('🔍 Debug - Search term:', search)
+  console.log('🔍 Debug - Sorted products (first 5):', filteredProducts.slice(0, 5).map((p: any) => ({ name: p.name, quantity: p.quantity, inStock: (p.quantity || 0) > 0 })))
 
   if (loading) {
     return (
@@ -1516,6 +1543,26 @@ export default function PublicShopPage() {
                 <div className="text-blue-100 dark:text-blue-200 text-xs">Support Colleagues</div>
               </div>
             </div>
+            
+            {/* QR Code Payment Button */}
+            {store?.qrCodes && (store.qrCodes.gcash || store.qrCodes.gotyme || store.qrCodes.bpi) && (
+              <div className="mt-6">
+                <button
+                  onClick={() => setShowQRCodeModal(true)}
+                  className="bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 text-white px-6 py-3 rounded-lg transition-all duration-200 flex items-center gap-3 mx-auto shadow-lg hover:shadow-xl"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 011-1h2m0 0V4a1 1 0 011-1h1m0 0h2a1 1 0 011 1v1M9 7h1m4 0h1m-5.01 0h.01M12 9v.01" />
+                  </svg>
+                  <span className="font-semibold">View Payment QR Codes</span>
+                  <div className="flex gap-1">
+                    {store.qrCodes.gcash && <span className="px-2 py-1 bg-blue-500 text-white text-xs rounded">GCash</span>}
+                    {store.qrCodes.gotyme && <span className="px-2 py-1 bg-green-500 text-white text-xs rounded">GoTyme</span>}
+                    {store.qrCodes.bpi && <span className="px-2 py-1 bg-red-500 text-white text-xs rounded">BPI</span>}
+                  </div>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1841,7 +1888,17 @@ export default function PublicShopPage() {
                         : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
                     }`}
                   >
-                    {activeTab === 'preorder' ? 'Preorder' : 'Cart'} ({activeTab === 'preorder' ? preorderCart.length : cart.length})
+                    {activeTab === 'preorder' ? 'Preorder' : 'Cart'} (
+                    <span 
+                      className={`${
+                        activeTab === 'preorder' && shouldPulsePreorder && preorderCart.length > 0
+                          ? 'animate-pulse-notification text-orange-500 dark:text-orange-400 font-bold' 
+                          : ''
+                      }`}
+                    >
+                      {activeTab === 'preorder' ? preorderCart.length : cart.length}
+                    </span>
+                    )
                   </button>
                   <button
                     onClick={() => setActiveCartTab('confirmed')}
@@ -2281,6 +2338,14 @@ export default function PublicShopPage() {
           </div>
         </div>
       )}
+
+      {/* QR Code Modal */}
+      <QRCodeModal
+        isOpen={showQRCodeModal}
+        onClose={() => setShowQRCodeModal(false)}
+        qrCodes={store?.qrCodes || {}}
+        storeName={store?.name || storeName}
+      />
     </div>
   )
 }

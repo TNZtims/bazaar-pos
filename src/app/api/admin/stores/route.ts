@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     await connectToDatabase()
     
     const stores = await Store.find({})
-      .select('storeName isActive isAdmin cashiers isOnline isLocked storeHours bannerImageUrl logoImageUrl createdAt updatedAt')
+      .select('storeName isActive isAdmin cashiers isOnline isLocked storeHours bannerImageUrl logoImageUrl qrCodes createdAt updatedAt')
       .sort({ createdAt: -1 })
     
     // Ensure isLocked field exists for all stores (set to false if undefined)
