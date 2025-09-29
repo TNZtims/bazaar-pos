@@ -71,18 +71,27 @@ export async function GET(request: NextRequest) {
     
     // Customer name, Order ID, or Product name search
     if (search) {
+      console.log('🔍 Sales API: Search term:', search)
       // Try to search by Order ID first (if it looks like a MongoDB ObjectId)
       if (search.length === 24 && /^[0-9a-fA-F]{24}$/.test(search)) {
         query._id = search
+        console.log('🔍 Sales API: Searching by ObjectId:', search)
       } else {
-        // Search by customer name, phone, email, partial order ID, or product name
+        // Search by customer info, product names, cashier, status, and order details
+        // Note: Removed _id regex search as ObjectIds don't support $options
         query.$or = [
           { customerName: { $regex: search, $options: 'i' } },
           { customerPhone: { $regex: search, $options: 'i' } },
           { customerEmail: { $regex: search, $options: 'i' } },
-          { _id: { $regex: search, $options: 'i' } }, // Partial ID search
-          { 'items.productName': { $regex: search, $options: 'i' } } // Product name search
+          { 'items.productName': { $regex: search, $options: 'i' } }, // Product name search
+          { cashier: { $regex: search, $options: 'i' } }, // Cashier who processed
+          { approvedBy: { $regex: search, $options: 'i' } }, // Cashier who approved
+          { status: { $regex: search, $options: 'i' } }, // Order status
+          { paymentStatus: { $regex: search, $options: 'i' } }, // Payment status
+          { paymentMethod: { $regex: search, $options: 'i' } }, // Payment method
+          { notes: { $regex: search, $options: 'i' } } // Order notes/details
         ]
+        console.log('🔍 Sales API: Searching with expanded $or query')
       }
     }
     
@@ -94,13 +103,16 @@ export async function GET(request: NextRequest) {
       sortOption = { createdAt: -1 } // Newest first
     }
     
+    console.log('🔍 Sales API: Final query:', JSON.stringify(query, null, 2))
+    
     const sales = await Sale.find(query)
-      .populate('items.product', 'name')
       .limit(limit)
       .skip((page - 1) * limit)
       .sort(sortOption)
     
     const total = await Sale.countDocuments(query)
+    
+    console.log(`🔍 Sales API: Found ${sales.length} sales, total: ${total}`)
     
     return NextResponse.json({
       sales,
@@ -108,9 +120,11 @@ export async function GET(request: NextRequest) {
       currentPage: page,
       total
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    console.error('❌ Sales API Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { message: 'Error fetching sales', error: error.message },
+      { message: 'Error fetching sales', error: errorMessage },
       { status: 500 }
     )
   }
