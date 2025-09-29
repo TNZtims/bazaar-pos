@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface Store {
   id: string
@@ -36,6 +37,7 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [store, setStore] = useState<Store | null>(null)
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   // Check authentication status on mount
   useEffect(() => {
@@ -116,6 +118,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     } finally {
       setStore(null)
       localStorage.setItem('auth-status', 'logged-out')
+      // Redirect to login page
+      router.push('/login')
     }
   }
 
