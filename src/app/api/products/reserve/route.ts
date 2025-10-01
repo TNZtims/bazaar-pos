@@ -104,6 +104,9 @@ export async function POST(request: NextRequest) {
         )
       }
       
+      // AUDIT: Log stock reservation
+      console.log(`📦 AUDIT: Stock reserved - Product: ${updatedProduct.name}, Quantity: ${quantity}, New Stock: ${updatedProduct.quantity}`)
+      
       // Broadcast inventory update via WebSocket
       if ((global as any).io) {
         console.log('🔊 Broadcasting inventory change via WebSocket (products/reserve):', {
@@ -149,6 +152,9 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
+      
+      // AUDIT: Log stock release
+      console.log(`📦 AUDIT: Stock released - Product: ${updatedProduct.name}, Quantity: ${quantity}, New Stock: ${updatedProduct.quantity}`)
       
       // Broadcast inventory update via WebSocket
       if ((global as any).io) {

@@ -563,22 +563,36 @@ export async function DELETE(
       )
     }
     
-    // Only allow deletion of pending orders
+    // FIXED: Prevent deletion of completed orders and restrict stock restoration
     if (sale.paymentStatus === 'paid' || sale.status === 'completed') {
       return NextResponse.json(
-        { message: 'Cannot delete completed or paid orders' },
+        { message: 'Cannot delete completed or paid orders. This prevents inventory corruption.' },
         { status: 400 }
       )
     }
     
-    console.log(`🗑️ Deleting order ${id} and restoring stock for ${sale.items.length} items`)
+    // Additional safety check: Only allow deletion within 24 hours of creation for pending orders
+    const createdAt = new Date(sale.createdAt)
+    const now = new Date()
+    const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60)
+    
+    if (hoursSinceCreation > 24) {
+      return NextResponse.json(
+        { message: 'Cannot delete orders older than 24 hours. Contact administrator if needed.' },
+        { status: 400 }
+      )
+    }
+    
+    console.log(`🗑️ AUDIT: Deleting order ${id} and restoring stock for ${sale.items.length} items`)
+    console.log(`🗑️ AUDIT: Order details - Customer: ${sale.customerName}, Status: ${sale.status}, Payment: ${sale.paymentStatus}, Created: ${sale.createdAt}`)
     
     // Restore product quantities (both total and reserved)
     const updatedProducts = []
     for (const item of sale.items) {
       const product = await Product.findById(item.product)
       if (product) {
-        console.log(`📦 Restoring ${item.quantity} units of ${product.name} (ID: ${item.product})`)
+        const oldQuantity = product.quantity
+        console.log(`📦 AUDIT: Restoring ${item.quantity} units of ${product.name} (ID: ${item.product}) - Old Qty: ${oldQuantity}`)
         
         // Add back to quantity (the actual database field)
         const updatedProduct = await Product.findByIdAndUpdate(
@@ -592,10 +606,10 @@ export async function DELETE(
         )
         if (updatedProduct) {
           updatedProducts.push(updatedProduct)
-          console.log(`✅ Stock restored for ${product.name}: New Quantity=${updatedProduct.quantity}`)
+          console.log(`✅ AUDIT: Stock restored for ${product.name}: ${oldQuantity} → ${updatedProduct.quantity} (+${item.quantity})`)
         }
       } else {
-        console.warn(`⚠️ Product ${item.product} not found during stock restoration`)
+        console.warn(`⚠️ AUDIT: Product ${item.product} not found during stock restoration`)
       }
     }
     

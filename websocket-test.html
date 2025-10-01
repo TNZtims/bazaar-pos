@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>WebSocket Connection Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="log"></div>
+
+    <script>
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+        
+        function addLog(message) {
+            const div = document.createElement('div');
+            div.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            log.appendChild(div);
+            console.log(message);
+        }
+
+        // Test WebSocket connection
+        const socket = io('http://localhost:3000', {
+            transports: ['websocket', 'polling'],
+            timeout: 10000,
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionAttempts: 5
+        });
+
+        socket.on('connect', () => {
+            status.textContent = 'Connected ✅';
+            status.style.color = 'green';
+            addLog('WebSocket connected successfully');
+            
+            // Test joining a store room
+            socket.emit('join-store', 'test-store-id');
+            addLog('Sent join-store request');
+        });
+
+        socket.on('disconnect', () => {
+            status.textContent = 'Disconnected ❌';
+            status.style.color = 'red';
+            addLog('WebSocket disconnected');
+        });
+
+        socket.on('connect_error', (error) => {
+            status.textContent = 'Connection Error ❌';
+            status.style.color = 'red';
+            addLog('Connection error: ' + error.message);
+        });
+
+        socket.on('reconnect', () => {
+            addLog('WebSocket reconnected');
+        });
+
+        socket.on('reconnect_error', (error) => {
+            addLog('Reconnection error: ' + error.message);
+        });
+
+        socket.on('reconnect_failed', () => {
+            addLog('Reconnection failed after maximum attempts');
+        });
+
+        // Test inventory updates
+        socket.on('inventory-changed', (data) => {
+            addLog('Received inventory update: ' + JSON.stringify(data));
+        });
+    </script>
+</body>
+</html>

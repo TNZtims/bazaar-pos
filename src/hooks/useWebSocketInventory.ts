@@ -54,15 +54,42 @@ export function useWebSocketInventory({
 
     console.log('Connecting to WebSocket...')
     
-    const newSocket = io({
-      transports: ['websocket', 'polling']
-    })
+    // Get the current host and protocol for WebSocket connection
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const wsUrl = `${window.location.protocol}//${host}`
+    
+    console.log('WebSocket URL:', wsUrl)
+    
+    let newSocket: Socket | null = null
+    
+    try {
+      newSocket = io(wsUrl, {
+        transports: ['websocket', 'polling'],
+        timeout: 5000,
+        reconnection: true,
+        reconnectionDelay: 2000,
+        reconnectionAttempts: 3,
+        forceNew: true
+      })
+    } catch (err) {
+      console.error('Failed to initialize WebSocket:', err)
+      setError('WebSocket initialization failed')
+      return
+    }
+
+    if (!newSocket) {
+      console.error('WebSocket initialization returned null')
+      setError('WebSocket not available')
+      return
+    }
 
     newSocket.on('connect', () => {
       console.log('🔗 WebSocket connected successfully')
       console.log('🏪 Joining store room:', storeId)
       setIsConnected(true)
       setError(null)
+      clearTimeout(connectionTimeout)
       
       // Join store-specific room
       newSocket.emit('join-store', storeId)
@@ -76,7 +103,33 @@ export function useWebSocketInventory({
 
     newSocket.on('connect_error', (err) => {
       console.error('WebSocket connection error:', err)
-      setError('Failed to connect to real-time updates')
+      setError('Real-time updates unavailable (server connection failed)')
+      setIsConnected(false)
+      
+      // Don't retry if it's a server connection issue
+      if (err.message?.includes('xhr poll error') || err.message?.includes('websocket error')) {
+        console.log('🚫 WebSocket server appears to be unavailable, disabling reconnection')
+        newSocket.disconnect()
+      }
+    })
+
+    // Add connection timeout
+    const connectionTimeout = setTimeout(() => {
+      if (!isConnected) {
+        console.log('⏰ WebSocket connection timeout, giving up')
+        setError('Real-time updates unavailable (connection timeout)')
+        newSocket.disconnect()
+      }
+    }, 10000) // 10 second timeout
+
+    newSocket.on('reconnect_error', (err) => {
+      console.error('WebSocket reconnection error:', err)
+      setError('Unable to reconnect to real-time updates')
+    })
+
+    newSocket.on('reconnect_failed', () => {
+      console.error('WebSocket reconnection failed after maximum attempts')
+      setError('Real-time updates unavailable - please refresh the page')
       setIsConnected(false)
     })
 
@@ -184,6 +237,7 @@ export function useWebSocketInventory({
 
     return () => {
       console.log('Cleaning up WebSocket connection')
+      clearTimeout(connectionTimeout)
       newSocket.close()
       setSocket(null)
       setIsConnected(false)

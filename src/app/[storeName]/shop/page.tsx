@@ -321,11 +321,19 @@ export default function PublicShopPage() {
         // The message to show - keep it simple for better browser compatibility
         const message = 'You have items in your cart. Are you sure you want to leave?'
         
-        // Save to localStorage immediately for cleanup
-        localStorage.setItem('pendingCartCleanup', JSON.stringify(cart.map(item => ({
-          productId: item.product._id,
-          quantity: item.quantity
-        }))))
+        // Save to localStorage with session ID and timestamp
+        const sessionId = sessionStorage.getItem('cartSessionId') || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        sessionStorage.setItem('cartSessionId', sessionId)
+        
+        const cartData = {
+          sessionId: sessionId,
+          timestamp: Date.now(),
+          items: cart.map(item => ({
+            productId: item.product._id,
+            quantity: item.quantity
+          }))
+        }
+        localStorage.setItem('pendingCartCleanup', JSON.stringify(cartData))
         
         // Multiple approaches for different browsers
         event.preventDefault() // Standard
@@ -357,11 +365,19 @@ export default function PublicShopPage() {
     const handlePageHide = (event: PageTransitionEvent) => {
       if (cart.length > 0) {
         
-        // Save to localStorage
-        localStorage.setItem('pendingCartCleanup', JSON.stringify(cart.map(item => ({
-          productId: item.product._id,
-          quantity: item.quantity
-        }))))
+        // Save to localStorage with session ID and timestamp
+        const sessionId = sessionStorage.getItem('cartSessionId') || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        sessionStorage.setItem('cartSessionId', sessionId)
+        
+        const cartData = {
+          sessionId: sessionId,
+          timestamp: Date.now(),
+          items: cart.map(item => ({
+            productId: item.product._id,
+            quantity: item.quantity
+          }))
+        }
+        localStorage.setItem('pendingCartCleanup', JSON.stringify(cartData))
         
         // Try sendBeacon for iOS
         for (const item of cart) {
@@ -383,11 +399,19 @@ export default function PublicShopPage() {
     // Additional protection for page visibility changes (when user switches tabs)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden' && cart.length > 0) {
-        // Save cart state to localStorage as backup
-        localStorage.setItem('pendingCartCleanup', JSON.stringify(cart.map(item => ({
-          productId: item.product._id,
-          quantity: item.quantity
-        }))))
+        // Save cart state to localStorage with session ID and timestamp
+        const sessionId = sessionStorage.getItem('cartSessionId') || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        sessionStorage.setItem('cartSessionId', sessionId)
+        
+        const cartData = {
+          sessionId: sessionId,
+          timestamp: Date.now(),
+          items: cart.map(item => ({
+            productId: item.product._id,
+            quantity: item.quantity
+          }))
+        }
+        localStorage.setItem('pendingCartCleanup', JSON.stringify(cartData))
       }
     }
     
@@ -396,40 +420,61 @@ export default function PublicShopPage() {
     window.addEventListener('pagehide', handlePageHide)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     
-    // Check for pending cart cleanup on page load (CRITICAL for quantity reversion)
+    // FIXED: Improved cart cleanup with session validation and expiration
     const pendingCleanup = localStorage.getItem('pendingCartCleanup')
     if (pendingCleanup) {
       ;(async () => {
         try {
-          const cartItems = JSON.parse(pendingCleanup)
+          const cartData = JSON.parse(pendingCleanup)
           
-          // Release ALL reserved stock for items that were in cart during page close/refresh
-          const releasePromises = cartItems.map(async (item: any) => {
-            try {
-              const response = await fetch('/api/products/reserve', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  productId: item.productId,
-                  quantity: item.quantity,
-                  action: 'release'
-                }),
-                credentials: 'include'
-              })
-              
-              if (response.ok) {
-              } else {
-                console.error(`❌ Failed to release stock for product ${item.productId}:`, await response.text())
+          // Generate or get session ID for this user
+          let sessionId = sessionStorage.getItem('cartSessionId')
+          if (!sessionId) {
+            sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+            sessionStorage.setItem('cartSessionId', sessionId)
+          }
+          
+          // Check if this cleanup data belongs to the current session
+          const isSameSession = cartData.sessionId === sessionId
+          
+          // Check if cleanup data is recent (within 1 hour)
+          const isRecent = cartData.timestamp && (Date.now() - cartData.timestamp) < (60 * 60 * 1000)
+          
+          // Only cleanup if it's the same session and recent
+          if (isSameSession && isRecent && cartData.items) {
+            console.log('🧹 Cleaning up cart from same session:', cartData.items.length, 'items')
+            
+            const releasePromises = cartData.items.map(async (item: any) => {
+              try {
+                const response = await fetch('/api/products/reserve', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    productId: item.productId,
+                    quantity: item.quantity,
+                    action: 'release'
+                  }),
+                  credentials: 'include'
+                })
+                
+                if (!response.ok) {
+                  console.error(`❌ Failed to release stock for product ${item.productId}:`, await response.text())
+                }
+              } catch (err) {
+                console.error('Failed to release reserved stock:', err)
               }
-            } catch (err) {
-              console.error('Failed to release reserved stock from localStorage:', err)
-            }
-          })
+            })
+            
+            await Promise.allSettled(releasePromises)
+          } else {
+            console.log('🚫 Skipping cleanup - different session or expired data:', {
+              isSameSession,
+              isRecent,
+              hasItems: !!cartData.items
+            })
+          }
           
-          // Wait for all releases to complete
-          await Promise.allSettled(releasePromises)
-          
-          // Clear the pending cleanup only after attempting all releases
+          // Always clear the cleanup data
           localStorage.removeItem('pendingCartCleanup')
         } catch (err) {
           console.error('Failed to parse pending cart cleanup:', err)

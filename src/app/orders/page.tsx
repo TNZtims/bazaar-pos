@@ -52,13 +52,23 @@ export default function OrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   
-  // Real-time order updates via WebSocket
+  // Real-time order updates via WebSocket with error handling
   const { 
-    isConnected: isWebSocketConnected
+    isConnected: isWebSocketConnected,
+    error: webSocketError
   } = useWebSocketInventory({
     storeId: store?.id || null,
     enabled: !!store?.id
   })
+
+  // Log WebSocket status for debugging
+  useEffect(() => {
+    console.log('📡 Orders Page WebSocket Status:', {
+      connected: isWebSocketConnected,
+      error: webSocketError,
+      storeId: store?.id
+    })
+  }, [isWebSocketConnected, webSocketError, store?.id])
   
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)

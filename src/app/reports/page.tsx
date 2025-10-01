@@ -18,6 +18,21 @@ interface TopProduct {
   salesCount: number
 }
 
+interface ProductSalesData {
+  _id: string
+  productName: string
+  currentStock: number
+  price: number
+  cost?: number
+  category?: string
+  totalQuantitySold: number
+  totalRevenue: number
+  salesCount: number
+  profit: number
+  profitMargin: number
+  lastSaleDate?: string
+}
+
 interface Sale {
   _id: string
   finalAmount: number
@@ -35,29 +50,47 @@ interface Sale {
 export default function ReportsPage() {
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null)
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
+  const [allProducts, setAllProducts] = useState<ProductSalesData[]>([])
   const [recentSales, setRecentSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
+  const [productsLoading, setProductsLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0])
+  const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0])
+  const [sortBy, setSortBy] = useState<'totalQuantitySold' | 'totalRevenue' | 'profit' | 'productName'>('totalQuantitySold')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [filterCategory, setFilterCategory] = useState<string>('all')
 
   useEffect(() => {
     fetchReports()
-  }, [selectedDate])
+  }, [selectedDate, dateFrom, dateTo])
 
   const fetchReports = async () => {
     setLoading(true)
+    setProductsLoading(true)
     try {
       // Fetch daily report
       const dailyRes = await fetch(`/api/reports/daily?date=${selectedDate}`)
       const dailyData = await dailyRes.json()
       setDailyReport(dailyData)
 
-      // Fetch top products (last 30 days)
+      // Fetch top products (last 30 days) - keep for backward compatibility
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
       
       const topProductsRes = await fetch(`/api/reports/top-products?limit=10&startDate=${thirtyDaysAgo.toISOString()}`)
       const topProductsData = await topProductsRes.json()
       setTopProducts(topProductsData)
+
+      // Fetch all products with sales data for selected date range
+      const startOfDay = new Date(dateFrom)
+      startOfDay.setHours(0, 0, 0, 0)
+      const endOfDay = new Date(dateTo)
+      endOfDay.setHours(23, 59, 59, 999)
+      
+      const allProductsRes = await fetch(`/api/reports/all-products?startDate=${startOfDay.toISOString()}&endDate=${endOfDay.toISOString()}`)
+      const allProductsData = await allProductsRes.json()
+      setAllProducts(allProductsData)
 
       // Fetch recent sales
       const salesRes = await fetch('/api/sales?limit=10')
@@ -68,10 +101,11 @@ export default function ReportsPage() {
       console.error('Error fetching reports:', error)
     } finally {
       setLoading(false)
+      setProductsLoading(false)
     }
   }
 
-  const formatDate = (dateString: string) => {
+  const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString()
   }
 
@@ -80,6 +114,103 @@ export default function ReportsPage() {
       return '₱0.00'
     }
     return `₱${amount.toFixed(2)}`
+  }
+
+  const formatPercentage = (value: number) => {
+    return `${value.toFixed(1)}%`
+  }
+
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return 'Never'
+    return new Date(dateString).toLocaleDateString()
+  }
+
+  // Get unique categories for filter
+  const categories = ['all', ...new Set(allProducts.map(p => p.category).filter(Boolean))]
+
+  // Sort and filter products
+  const sortedAndFilteredProducts = allProducts
+    .filter(product => filterCategory === 'all' || product.category === filterCategory)
+    .sort((a, b) => {
+      let aValue: any, bValue: any
+      
+      switch (sortBy) {
+        case 'productName':
+          aValue = a.productName.toLowerCase()
+          bValue = b.productName.toLowerCase()
+          break
+        case 'totalQuantitySold':
+          aValue = a.totalQuantitySold
+          bValue = b.totalQuantitySold
+          break
+        case 'totalRevenue':
+          aValue = a.totalRevenue
+          bValue = b.totalRevenue
+          break
+        case 'profit':
+          aValue = a.profit
+          bValue = b.profit
+          break
+        default:
+          aValue = a.totalQuantitySold
+          bValue = b.totalQuantitySold
+      }
+      
+      if (sortOrder === 'asc') {
+        return aValue > bValue ? 1 : aValue < bValue ? -1 : 0
+      } else {
+        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0
+      }
+    })
+
+  const handleSort = (column: typeof sortBy) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(column)
+      setSortOrder('desc')
+    }
+  }
+
+  // Helper function to format date range for display
+  const formatDateRange = () => {
+    if (dateFrom === dateTo) {
+      return dateFrom
+    }
+    return `${dateFrom} to ${dateTo}`
+  }
+
+  // Validation: ensure dateFrom is not after dateTo
+  const handleDateFromChange = (value: string) => {
+    setDateFrom(value)
+    if (value > dateTo) {
+      setDateTo(value)
+    }
+  }
+
+  const handleDateToChange = (value: string) => {
+    setDateTo(value)
+    if (value < dateFrom) {
+      setDateFrom(value)
+    }
+  }
+
+  // Quick date range presets
+  const setDateRangePreset = (days: number) => {
+    const today = new Date()
+    const startDate = new Date()
+    startDate.setDate(today.getDate() - days + 1) // Include today
+    
+    setDateFrom(startDate.toISOString().split('T')[0])
+    setDateTo(today.toISOString().split('T')[0])
+  }
+
+  const setThisMonth = () => {
+    const today = new Date()
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+    
+    setDateFrom(firstDay.toISOString().split('T')[0])
+    setDateTo(today.toISOString().split('T')[0])
   }
 
   return (
@@ -92,10 +223,33 @@ export default function ReportsPage() {
             <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Sales performance and insights</p>
           </div>
           
-          {/* Date Selector */}
-          <div className="mt-4 sm:mt-0">
+          {/* Date Range Selector */}
+          <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                Date From
+              </label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => handleDateFromChange(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                Date To
+              </label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => handleDateToChange(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              />
+            </div>
+            <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-              Report Date
+                Daily Report Date
             </label>
             <input
               type="date"
@@ -103,6 +257,35 @@ export default function ReportsPage() {
               onChange={(e) => setSelectedDate(e.target.value)}
               className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             />
+            </div>
+            
+            {/* Quick Date Range Presets */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => setDateRangePreset(1)}
+                className="px-3 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+              >
+                Today
+              </button>
+              <button
+                onClick={() => setDateRangePreset(7)}
+                className="px-3 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+              >
+                Last 7 Days
+              </button>
+              <button
+                onClick={() => setDateRangePreset(30)}
+                className="px-3 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+              >
+                Last 30 Days
+              </button>
+              <button
+                onClick={setThisMonth}
+                className="px-3 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+              >
+                This Month
+              </button>
+            </div>
           </div>
         </div>
 
@@ -165,37 +348,201 @@ export default function ReportsPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Top Products */}
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Top Products (Last 30 Days)</h2>
-                
-                {topProducts.length === 0 ? (
-                  <p className="text-gray-500 dark:text-slate-400 text-center py-8">No sales data available</p>
+            {/* Enhanced Top Products Table - Full Width */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+              <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">All Products Performance</h2>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
+                      Complete overview of all products with completed paid sales for {formatDateRange()}
+                    </p>
+                  </div>
+                  
+                  {/* Filters and Controls */}
+                  <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-3">
+                    <select
+                      value={filterCategory}
+                      onChange={(e) => setFilterCategory(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {categories.map(category => (
+                        <option key={category} value={category}>
+                          {category === 'all' ? 'All Categories' : category || 'Uncategorized'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                {productsLoading ? (
+                  <div className="text-center py-12">
+                    <div className="inline-flex items-center gap-2 text-gray-600 dark:text-slate-400">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                      Loading products data...
+                    </div>
+                  </div>
+                ) : sortedAndFilteredProducts.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="text-gray-500 dark:text-slate-400">
+                      <div className="text-4xl mb-4">📦</div>
+                      <p className="text-lg font-medium">No products found</p>
+                      <p className="text-sm">Try adjusting your filters or add some products to your inventory</p>
+                    </div>
+                  </div>
                 ) : (
-                  <div className="space-y-3">
-                    {topProducts.map((product, index) => (
-                      <div key={product._id} className="flex items-center justify-between py-3 border-b border-gray-100 dark:border-slate-600 last:border-b-0">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
+                    <thead className="bg-gray-50 dark:bg-slate-700">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                          <button
+                            onClick={() => handleSort('productName')}
+                            className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-slate-200"
+                          >
+                            Product
+                            {sortBy === 'productName' && (
+                              <span className="text-blue-500">
+                                {sortOrder === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </button>
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                          Category
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                          Current Stock
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                          Price
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                          <button
+                            onClick={() => handleSort('totalQuantitySold')}
+                            className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-slate-200"
+                          >
+                            Units Sold
+                            {sortBy === 'totalQuantitySold' && (
+                              <span className="text-blue-500">
+                                {sortOrder === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </button>
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                          Sales Count
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                          <button
+                            onClick={() => handleSort('totalRevenue')}
+                            className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-slate-200"
+                          >
+                            Revenue
+                            {sortBy === 'totalRevenue' && (
+                              <span className="text-blue-500">
+                                {sortOrder === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </button>
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                          <button
+                            onClick={() => handleSort('profit')}
+                            className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-slate-200"
+                          >
+                            Profit
+                            {sortBy === 'profit' && (
+                              <span className="text-blue-500">
+                                {sortOrder === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </button>
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                          Margin
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                          Last Sale
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                      {sortedAndFilteredProducts.map((product, index) => (
+                        <tr 
+                          key={product._id} 
+                          className={`hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${
+                            product.totalQuantitySold === 0 ? 'opacity-75' : ''
+                          }`}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full flex items-center justify-center text-sm font-semibold mr-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold mr-3 ${
+                                product.totalQuantitySold > 0 
+                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                              }`}>
                             {index + 1}
                           </div>
                           <div>
-                            <h4 className="font-medium text-gray-900 dark:text-slate-100">{product.productName}</h4>
-                            <p className="text-sm text-gray-600 dark:text-slate-400">{product.salesCount} sales</p>
+                                <div className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                                  {product.productName}
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-gray-900 dark:text-slate-100">{product.totalQuantitySold} units</p>
-                          <p className="text-sm text-gray-600 dark:text-slate-400">{formatCurrency(product.totalRevenue)}</p>
+                                {product.totalQuantitySold === 0 && (
+                                  <div className="text-xs text-red-500 dark:text-red-400">No sales</div>
+                                )}
                         </div>
                       </div>
-                    ))}
-                  </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
+                            {product.category || 'Uncategorized'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              product.currentStock === 0 
+                                ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'
+                                : product.currentStock <= 5
+                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'
+                                : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                            }`}>
+                              {product.currentStock} units
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-slate-100">
+                            {formatCurrency(product.price)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-slate-100">
+                            {product.totalQuantitySold}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
+                            {product.salesCount}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-slate-100">
+                            {formatCurrency(product.totalRevenue)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <span className={product.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                              {formatCurrency(product.profit)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={product.profitMargin >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                              {formatPercentage(product.profitMargin)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
+                            {formatDate(product.lastSaleDate)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
+              </div>
 
-              {/* Recent Sales */}
+            {/* Recent Sales - Now Below Products Table */}
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Recent Sales</h2>
                 
@@ -209,7 +556,7 @@ export default function ReportsPage() {
                           <div className="flex items-center justify-between mb-2">
                             <div>
                               <p className="font-medium text-gray-900 dark:text-slate-100">{formatCurrency(sale.finalAmount)}</p>
-                              <p className="text-sm text-gray-600 dark:text-slate-400">{formatDate(sale.createdAt)}</p>
+                            <p className="text-sm text-gray-600 dark:text-slate-400">{formatDateTime(sale.createdAt)}</p>
                             </div>
                             <div className="text-right">
                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -243,7 +590,6 @@ export default function ReportsPage() {
                     </div>
                   </div>
                 )}
-              </div>
             </div>
           </>
         )}
