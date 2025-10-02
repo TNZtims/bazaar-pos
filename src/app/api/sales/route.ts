@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // General search (Order ID, Product name, etc.)
+    // General search (Order ID, Product name, Customer info, Amounts, etc.)
     if (search) {
       console.log('🔍 Sales API: Search term:', search)
       // Try to search by Order ID first (if it looks like a MongoDB ObjectId)
@@ -104,17 +104,52 @@ export async function GET(request: NextRequest) {
         query._id = search
         console.log('🔍 Sales API: Searching by ObjectId:', search)
       } else {
-        // Search by product names, cashier, status, and order details (excluding customer info since we have dedicated filter)
-        query.$or = [
+        // Comprehensive search across all fields
+        const searchConditions = [
           { 'items.productName': { $regex: search, $options: 'i' } }, // Product name search
           { cashier: { $regex: search, $options: 'i' } }, // Cashier who processed
           { approvedBy: { $regex: search, $options: 'i' } }, // Cashier who approved
           { status: { $regex: search, $options: 'i' } }, // Order status
           { paymentStatus: { $regex: search, $options: 'i' } }, // Payment status
           { paymentMethod: { $regex: search, $options: 'i' } }, // Payment method
-          { notes: { $regex: search, $options: 'i' } } // Order notes/details
+          { notes: { $regex: search, $options: 'i' } }, // Order notes/details
+          { customerName: { $regex: search, $options: 'i' } }, // Customer name
+          { customerPhone: { $regex: search, $options: 'i' } }, // Customer phone
+          { customerEmail: { $regex: search, $options: 'i' } } // Customer email
         ]
-        console.log('🔍 Sales API: Searching with expanded $or query')
+
+        // Check if search term is a number (for amount searches)
+        const numericSearch = parseFloat(search)
+        if (!isNaN(numericSearch)) {
+          searchConditions.push(
+            { finalAmount: numericSearch }, // Exact amount match
+            { subtotal: numericSearch }, // Subtotal match
+            { amountPaid: numericSearch }, // Amount paid match
+            { amountDue: numericSearch }, // Amount due match
+            { tax: numericSearch }, // Tax amount match
+            { discount: numericSearch } // Discount amount match
+          )
+        }
+
+        // Check if search term looks like a date (YYYY-MM-DD format)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+        if (dateRegex.test(search)) {
+          const searchDate = new Date(search)
+          const startOfDay = new Date(searchDate)
+          startOfDay.setHours(0, 0, 0, 0)
+          const endOfDay = new Date(searchDate)
+          endOfDay.setHours(23, 59, 59, 999)
+          
+          searchConditions.push({
+            createdAt: {
+              $gte: startOfDay,
+              $lte: endOfDay
+            }
+          })
+        }
+
+        query.$or = searchConditions
+        console.log('🔍 Sales API: Searching with comprehensive $or query across', searchConditions.length, 'fields')
       }
     }
     

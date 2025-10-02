@@ -84,6 +84,7 @@ export default function OrdersPage() {
   }, [deleting])
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [searchInput, setSearchInput] = useState('') // Separate state for input field
   const [customerNameFilter, setCustomerNameFilter] = useState('')
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('all')
   const [productFilter, setProductFilter] = useState<string>('all')
@@ -467,9 +468,20 @@ ${itemsList}
     return new Date(order.dueDate) < new Date()
   }
 
+  const handleSearch = () => {
+    setSearchTerm(searchInput)
+  }
+
+  const handleSearchKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch()
+    }
+  }
+
   const clearFilters = () => {
     setPaymentStatusFilter('all')
     setSearchTerm('')
+    setSearchInput('')
     setCustomerNameFilter('')
     setProductFilter('all')
     setDateFrom('')
@@ -916,14 +928,18 @@ ${itemsList}
               </div>
               <input
                 type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by order ID or product name..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyPress={handleSearchKeyPress}
+                placeholder="Search orders by ID, customer, product, cashier, amount, status, or any field..."
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500 dark:placeholder-slate-400"
               />
-              {searchTerm && (
+              {searchInput && (
                 <button
-                  onClick={() => setSearchTerm('')}
+                  onClick={() => {
+                    setSearchInput('')
+                    setSearchTerm('')
+                  }}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 >
                   <svg className="h-5 w-5 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -932,6 +948,15 @@ ${itemsList}
                 </button>
               )}
             </div>
+            <button
+              onClick={handleSearch}
+              className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors flex items-center gap-2 font-medium"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Search
+            </button>
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-600 dark:text-slate-400">
                 {totalOrders > 0 ? `${startIndex}-${endIndex} of ${totalOrders}` : '0 orders'}
@@ -950,6 +975,32 @@ ${itemsList}
               </select>
             </div>
           </div>
+          
+          {/* Search Help Text */}
+          {searchInput && (
+            <div className="mt-2 text-xs text-gray-500 dark:text-slate-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">Search Tips:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs">
+                    <span>• Order ID (24-character)</span>
+                    <span>• Customer name, phone, email</span>
+                    <span>• Product names</span>
+                    <span>• Cashier names</span>
+                    <span>• Payment status (paid, pending, etc.)</span>
+                    <span>• Payment method (cash, card, digital)</span>
+                    <span>• Order status (active, completed, etc.)</span>
+                    <span>• Amounts (₱100, 100.50)</span>
+                    <span>• Dates (2024-01-15)</span>
+                    <span>• Order notes</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Orders Table */}
