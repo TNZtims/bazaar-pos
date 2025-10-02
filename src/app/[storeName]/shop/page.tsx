@@ -4,11 +4,15 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useWebSocketInventory } from '@/hooks/useWebSocketInventory'
 import QRCodeModal from '@/components/QRCodeModal'
+import StarRating from '@/components/StarRating'
+import LoadingOverlay from '@/components/LoadingOverlay'
+import WebSocketStatus from '@/components/WebSocketStatus'
 
 interface Product {
   _id: string
   name: string
   price: number
+  discountPrice?: number
   quantity: number
   availableForPreorder: boolean
   description?: string
@@ -93,6 +97,12 @@ export default function PublicShopPage() {
   const [storeClosed, setStoreClosed] = useState(false)
   const [selectedImageProduct, setSelectedImageProduct] = useState<Product | null>(null)
   const [showQRCodeModal, setShowQRCodeModal] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  // Set mounted state on client-side
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Close modal on Escape key
   useEffect(() => {
@@ -115,6 +125,8 @@ export default function PublicShopPage() {
     cartUpdates,
     isConnected: isWebSocketConnected,
     error: webSocketError,
+    connectionQuality,
+    reconnectAttempts,
     broadcastCartUpdate
   } = useWebSocketInventory({
     storeId: storeId || null,
@@ -316,14 +328,17 @@ export default function PublicShopPage() {
   // Page refresh/exit protection with cart cleanup
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (cart.length > 0 && userHasInteracted) {
+      if (cart.length > 0 && userHasInteracted && mounted) {
         
         // The message to show - keep it simple for better browser compatibility
         const message = 'You have items in your cart. Are you sure you want to leave?'
         
         // Save to localStorage with session ID and timestamp
-        const sessionId = sessionStorage.getItem('cartSessionId') || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        sessionStorage.setItem('cartSessionId', sessionId)
+        let sessionId = sessionStorage.getItem('cartSessionId')
+        if (!sessionId) {
+          sessionId = `session_${crypto.randomUUID()}`
+          sessionStorage.setItem('cartSessionId', sessionId)
+        }
         
         const cartData = {
           sessionId: sessionId,
@@ -333,7 +348,7 @@ export default function PublicShopPage() {
             quantity: item.quantity
           }))
         }
-        localStorage.setItem('pendingCartCleanup', JSON.stringify(cartData))
+        if (mounted) localStorage.setItem('pendingCartCleanup', JSON.stringify(cartData))
         
         // Multiple approaches for different browsers
         event.preventDefault() // Standard
@@ -363,11 +378,14 @@ export default function PublicShopPage() {
     
     // Alternative: Use pagehide event for iOS Safari
     const handlePageHide = (event: PageTransitionEvent) => {
-      if (cart.length > 0) {
+      if (cart.length > 0 && mounted) {
         
         // Save to localStorage with session ID and timestamp
-        const sessionId = sessionStorage.getItem('cartSessionId') || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        sessionStorage.setItem('cartSessionId', sessionId)
+        let sessionId = sessionStorage.getItem('cartSessionId')
+        if (!sessionId) {
+          sessionId = `session_${crypto.randomUUID()}`
+          sessionStorage.setItem('cartSessionId', sessionId)
+        }
         
         const cartData = {
           sessionId: sessionId,
@@ -377,7 +395,7 @@ export default function PublicShopPage() {
             quantity: item.quantity
           }))
         }
-        localStorage.setItem('pendingCartCleanup', JSON.stringify(cartData))
+        if (mounted) localStorage.setItem('pendingCartCleanup', JSON.stringify(cartData))
         
         // Try sendBeacon for iOS
         for (const item of cart) {
@@ -398,10 +416,13 @@ export default function PublicShopPage() {
     
     // Additional protection for page visibility changes (when user switches tabs)
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden' && cart.length > 0) {
+      if (document.visibilityState === 'hidden' && cart.length > 0 && mounted) {
         // Save cart state to localStorage with session ID and timestamp
-        const sessionId = sessionStorage.getItem('cartSessionId') || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        sessionStorage.setItem('cartSessionId', sessionId)
+        let sessionId = sessionStorage.getItem('cartSessionId')
+        if (!sessionId) {
+          sessionId = `session_${crypto.randomUUID()}`
+          sessionStorage.setItem('cartSessionId', sessionId)
+        }
         
         const cartData = {
           sessionId: sessionId,
@@ -411,7 +432,7 @@ export default function PublicShopPage() {
             quantity: item.quantity
           }))
         }
-        localStorage.setItem('pendingCartCleanup', JSON.stringify(cartData))
+        if (mounted) localStorage.setItem('pendingCartCleanup', JSON.stringify(cartData))
       }
     }
     
@@ -421,16 +442,16 @@ export default function PublicShopPage() {
     document.addEventListener('visibilitychange', handleVisibilityChange)
     
     // FIXED: Improved cart cleanup with session validation and expiration
-    const pendingCleanup = localStorage.getItem('pendingCartCleanup')
-    if (pendingCleanup) {
+    const pendingCleanup = mounted ? localStorage.getItem('pendingCartCleanup') : null
+    if (pendingCleanup && mounted) {
       ;(async () => {
         try {
           const cartData = JSON.parse(pendingCleanup)
           
           // Generate or get session ID for this user
-          let sessionId = sessionStorage.getItem('cartSessionId')
-          if (!sessionId) {
-            sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+          let sessionId = mounted ? sessionStorage.getItem('cartSessionId') : null
+          if (!sessionId && mounted) {
+            sessionId = `session_${crypto.randomUUID()}`
             sessionStorage.setItem('cartSessionId', sessionId)
           }
           
@@ -475,10 +496,10 @@ export default function PublicShopPage() {
           }
           
           // Always clear the cleanup data
-          localStorage.removeItem('pendingCartCleanup')
+          if (mounted) localStorage.removeItem('pendingCartCleanup')
         } catch (err) {
           console.error('Failed to parse pending cart cleanup:', err)
-          localStorage.removeItem('pendingCartCleanup')
+          if (mounted) localStorage.removeItem('pendingCartCleanup')
         }
       })()
     }
@@ -514,7 +535,7 @@ export default function PublicShopPage() {
         })
       }
     }
-  }, [cart, userHasInteracted])
+  }, [cart, userHasInteracted, mounted])
 
   // Track user interaction for beforeunload (browsers require user interaction)
   useEffect(() => {
@@ -639,10 +660,10 @@ export default function PublicShopPage() {
           ? '/api/products'
           : `/api/products/public?store=${storeName}`
           
-        // Add cache-busting to ensure fresh products from database
-        const cacheBustUrl = apiUrl.includes('?') 
-          ? `${apiUrl}&_t=${Date.now()}`
-          : `${apiUrl}?_t=${Date.now()}`
+        // Add cache-busting to ensure fresh products from database (client-side only)
+        const cacheBustUrl = typeof window !== 'undefined' 
+          ? (apiUrl.includes('?') ? `${apiUrl}&_t=${Date.now()}` : `${apiUrl}?_t=${Date.now()}`)
+          : apiUrl
         
         console.log(`📡 API Call: ${cacheBustUrl}`)
         
@@ -701,10 +722,10 @@ export default function PublicShopPage() {
         ? '/api/products'
         : `/api/products/public?store=${storeName}`
         
-      // Add cache-busting to ensure fresh products
-      const cacheBustUrl = apiUrl.includes('?') 
-        ? `${apiUrl}&_t=${Date.now()}`
-        : `${apiUrl}?_t=${Date.now()}`
+      // Add cache-busting to ensure fresh products (client-side only)
+      const cacheBustUrl = typeof window !== 'undefined'
+        ? (apiUrl.includes('?') ? `${apiUrl}&_t=${Date.now()}` : `${apiUrl}?_t=${Date.now()}`)
+        : apiUrl
       
       const response = await fetch(cacheBustUrl, {
         credentials: 'include',
@@ -1025,9 +1046,14 @@ export default function PublicShopPage() {
     }
   }
 
+  // Helper function to get effective price (discounted price if available, otherwise regular price)
+  const getEffectivePrice = (product: Product) => {
+    return (product.discountPrice && product.discountPrice > 0) ? product.discountPrice : product.price
+  }
+
   const getTotalAmount = () => {
     const currentCart = activeTab === 'preorder' ? preorderCart : cart
-    return currentCart.reduce((total, item) => total + (item.product.price * item.quantity), 0)
+    return currentCart.reduce((total, item) => total + (getEffectivePrice(item.product) * item.quantity), 0)
   }
 
   // Calculate actual available quantity for display
@@ -1400,7 +1426,7 @@ export default function PublicShopPage() {
         }
         
         // Clear any pending cleanup since order was successfully placed
-        localStorage.removeItem('pendingCartCleanup')
+        if (mounted) localStorage.removeItem('pendingCartCleanup')
         
         // Refresh products to show updated availability
         await refreshProducts()
@@ -1469,17 +1495,6 @@ export default function PublicShopPage() {
   console.log('🔍 Debug - Active tab:', activeTab)
   console.log('🔍 Debug - Search term:', search)
   console.log('🔍 Debug - Sorted products (first 5):', filteredProducts.slice(0, 5).map((p: any) => ({ name: p.name, quantity: p.quantity, inStock: (p.quantity || 0) > 0 })))
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-slate-400">Loading products...</p>
-        </div>
-      </div>
-    )
-  }
 
   // Determine if store is online for shopping
   const isStoreOnlineForShopping = storeStatus && storeStatus.isOnline
@@ -1557,9 +1572,17 @@ export default function PublicShopPage() {
           </div>
             
             {/* Store Name */}
-            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-              {store?.name || storeName} Store
-            </h1>
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white">
+                {store?.name || storeName} Store
+              </h1>
+              <WebSocketStatus
+                isConnected={isWebSocketConnected}
+                connectionQuality={connectionQuality}
+                error={webSocketError}
+                reconnectAttempts={reconnectAttempts}
+              />
+            </div>
             
             {/* Store Description */}
             <p className="text-blue-100 dark:text-blue-200 text-base sm:text-lg mb-4 max-w-3xl mx-auto">
@@ -1611,6 +1634,21 @@ export default function PublicShopPage() {
           </div>
         </div>
       </div>
+
+      {/* Star Rating Section - Below Banner */}
+      {store?.id && (
+        <div className="bg-white dark:bg-slate-800 py-6">
+          <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-center">
+              <StarRating 
+                storeId={store.id} 
+                className="justify-center"
+                user={user}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         <div className="flex flex-col xl:grid xl:grid-cols-5 gap-4 lg:gap-6">
@@ -1722,6 +1760,15 @@ export default function PublicShopPage() {
                       className="bg-slate-700 h-48 flex items-center justify-center overflow-hidden relative cursor-pointer hover:bg-slate-600 transition-colors group"
                       onClick={() => setSelectedImageProduct(product)}
                     >
+                    {/* Sale Badge - Top Left */}
+                    {product.discountPrice && product.discountPrice > 0 && (
+                      <div className="absolute top-3 left-3 z-10">
+                        <span className="px-3 py-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-lg animate-pulse">
+                          SALE
+                        </span>
+                      </div>
+                    )}
+
                     {/* Stock Status Badge */}
                     <div className="absolute top-3 right-3 z-10">
                       {getActualAvailableQuantity(product) === 0 ? (
@@ -1776,8 +1823,38 @@ export default function PublicShopPage() {
 
                     {/* Price & Stock Info */}
                     <div className="flex items-center justify-between mb-4">
-                      <div className="text-2xl font-bold text-blue-400">
-                        ₱{product.price.toFixed(2)}
+                      <div className="flex flex-col">
+                        {product.discountPrice && product.discountPrice > 0 ? (
+                          <>
+                            {/* Original price with label and strikethrough */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500 font-medium">Original:</span>
+                              <div className="text-lg text-slate-400 line-through">
+                                ₱{product.price.toFixed(2)}
+                              </div>
+                            </div>
+                            {/* Sale price with label - larger and highlighted */}
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-red-300 font-medium">Sale Price:</span>
+                              <div className="text-2xl font-bold text-red-400">
+                                ₱{product.discountPrice.toFixed(2)}
+                              </div>
+                            </div>
+                            {/* Savings indicator */}
+                            <div className="text-xs text-green-400 font-medium mt-1">
+                              Save ₱{(product.price - product.discountPrice).toFixed(2)} 
+                              ({(((product.price - product.discountPrice) / product.price) * 100).toFixed(0)}% off)
+                            </div>
+                          </>
+                        ) : (
+                          /* Regular price when no discount */
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-400 font-medium">Price:</span>
+                            <div className="text-2xl font-bold text-blue-400">
+                              ₱{product.price.toFixed(2)}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="text-right">
                       {activeTab === 'shop' ? (
@@ -2000,7 +2077,7 @@ export default function PublicShopPage() {
                             {item.product.name}
                           </p>
                           <p className="text-sm text-gray-600 dark:text-slate-400">
-                            ₱{item.product.price.toFixed(2)} × {item.quantity}
+                            ₱{getEffectivePrice(item.product).toFixed(2)} × {item.quantity}
                           </p>
                         </div>
                         
@@ -2244,12 +2321,12 @@ export default function PublicShopPage() {
                             {item.product.name}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-slate-400">
-                            ₱{item.product.price.toFixed(2)} × {item.quantity}
+                            ₱{getEffectivePrice(item.product).toFixed(2)} × {item.quantity}
                           </div>
                         </div>
                         
                         <span className="text-gray-900 dark:text-slate-100 font-medium">
-                          ₱{(item.product.price * item.quantity).toFixed(2)}
+                          ₱{(getEffectivePrice(item.product) * item.quantity).toFixed(2)}
                         </span>
                       </div>
                     ))}
@@ -2315,7 +2392,15 @@ export default function PublicShopPage() {
             {/* Modal Content - Landscape Layout */}
             <div className="flex flex-col lg:flex-row h-full max-h-[calc(85vh-80px)]">
               {/* Image Section - Left Side */}
-              <div className="flex-1 lg:flex-[2] p-4 sm:p-6 flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+              <div className="flex-1 lg:flex-[2] p-4 sm:p-6 flex items-center justify-center bg-gray-50 dark:bg-slate-900 relative">
+                {/* Sale Badge for Modal */}
+                {selectedImageProduct.discountPrice && selectedImageProduct.discountPrice > 0 && (
+                  <div className="absolute top-6 left-6 z-10">
+                    <span className="px-4 py-2 bg-red-500 text-white text-sm font-bold rounded-full shadow-lg animate-pulse">
+                      SALE
+                    </span>
+                  </div>
+                )}
                 <img
                   src={selectedImageProduct.imageUrl || '/images/products/default.svg'}
                   alt={selectedImageProduct.name}
@@ -2332,9 +2417,33 @@ export default function PublicShopPage() {
                 <div className="space-y-6">
                   {/* Price Badge */}
                   <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center px-4 py-2 rounded-full text-lg font-bold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                      ₱{selectedImageProduct.price.toFixed(2)}
-                    </span>
+                    {selectedImageProduct.discountPrice && selectedImageProduct.discountPrice > 0 ? (
+                      <div className="flex flex-col items-start">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Original Price:</span>
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 line-through">
+                            ₱{selectedImageProduct.price.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs text-red-600 dark:text-red-400 font-medium">Sale Price:</span>
+                          <span className="inline-flex items-center px-4 py-2 rounded-full text-lg font-bold bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                            ₱{selectedImageProduct.discountPrice.toFixed(2)}
+                          </span>
+                        </div>
+                        <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                          Save ₱{(selectedImageProduct.price - selectedImageProduct.discountPrice).toFixed(2)} 
+                          ({(((selectedImageProduct.price - selectedImageProduct.discountPrice) / selectedImageProduct.price) * 100).toFixed(0)}% off)
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Price:</span>
+                        <span className="inline-flex items-center px-4 py-2 rounded-full text-lg font-bold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                          ₱{selectedImageProduct.price.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                     {selectedImageProduct.category && (
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                         {selectedImageProduct.category}
@@ -2390,6 +2499,14 @@ export default function PublicShopPage() {
         onClose={() => setShowQRCodeModal(false)}
         qrCodes={store?.qrCodes || {}}
         storeName={store?.name || storeName}
+      />
+
+      {/* Loading Overlay */}
+      <LoadingOverlay
+        isVisible={loading}
+        title="Loading Store"
+        message="Fetching products and store information..."
+        color="purple"
       />
     </div>
   )

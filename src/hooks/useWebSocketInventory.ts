@@ -4,6 +4,7 @@ import { io, Socket } from 'socket.io-client'
 interface InventoryUpdate {
   productId: string
   quantity?: number
+  initialStock?: number
   timestamp: string
   isNewProduct?: boolean
   productData?: any
@@ -33,6 +34,8 @@ interface UseWebSocketInventoryReturn {
   cartUpdates: CartUpdate[]
   isConnected: boolean
   error: string | null
+  connectionQuality: 'excellent' | 'good' | 'poor' | 'disconnected'
+  reconnectAttempts: number
   broadcastInventoryUpdate: (productId: string, updates: Partial<InventoryUpdate>) => void
   broadcastCartUpdate: (productId: string, action: 'reserve' | 'release', quantity: number) => void
 }
@@ -47,17 +50,54 @@ export function useWebSocketInventory({
   const [cartUpdates, setCartUpdates] = useState<CartUpdate[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'poor' | 'disconnected'>('disconnected')
+  const [reconnectAttempts, setReconnectAttempts] = useState(0)
+  const [lastPingTime, setLastPingTime] = useState<number>(0)
+  const [reconnectTimeoutId, setReconnectTimeoutId] = useState<NodeJS.Timeout | null>(null)
 
-  // Initialize WebSocket connection
-  useEffect(() => {
-    if (!enabled || !storeId) return
+  // Exponential backoff calculation
+  const getReconnectDelay = (attempt: number) => {
+    const baseDelay = 1000 // 1 second
+    const maxDelay = 30000 // 30 seconds
+    const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay)
+    // Add jitter to prevent thundering herd
+    return delay + Math.random() * 1000
+  }
 
-    console.log('Connecting to WebSocket...')
+  // Connection quality monitoring
+  const updateConnectionQuality = (latency: number) => {
+    if (latency < 100) {
+      setConnectionQuality('excellent')
+    } else if (latency < 300) {
+      setConnectionQuality('good')
+    } else if (latency < 1000) {
+      setConnectionQuality('poor')
+    } else {
+      setConnectionQuality('disconnected')
+    }
+  }
+
+  // Heartbeat mechanism
+  const startHeartbeat = (socket: Socket) => {
+    const heartbeatInterval = setInterval(() => {
+      if (socket.connected) {
+        const pingTime = Date.now()
+        setLastPingTime(pingTime)
+        socket.emit('ping', pingTime)
+      }
+    }, 10000) // Ping every 10 seconds
+
+    return heartbeatInterval
+  }
+
+  // Initialize WebSocket connection with enhanced stability
+  const initializeWebSocket = useCallback(() => {
+    if (!enabled || !storeId) return null
+
+    console.log(`🔄 Connecting to WebSocket... (attempt ${reconnectAttempts + 1})`)
     
     // Get the current host and protocol for WebSocket connection
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const wsUrl = `${window.location.protocol}//${host}`
+    const wsUrl = `${window.location.protocol}//${window.location.host}`
     
     console.log('WebSocket URL:', wsUrl)
     
@@ -66,71 +106,116 @@ export function useWebSocketInventory({
     try {
       newSocket = io(wsUrl, {
         transports: ['websocket', 'polling'],
-        timeout: 5000,
+        timeout: 15000, // Increased timeout
         reconnection: true,
-        reconnectionDelay: 2000,
-        reconnectionAttempts: 3,
-        forceNew: true
+        reconnectionDelay: getReconnectDelay(reconnectAttempts),
+        reconnectionDelayMax: 30000,
+        reconnectionAttempts: Infinity, // Never give up
+        maxReconnectionAttempts: Infinity,
+        randomizationFactor: 0.5,
+        forceNew: false, // Allow connection reuse
+        upgrade: true,
+        rememberUpgrade: true
       })
     } catch (err) {
       console.error('Failed to initialize WebSocket:', err)
       setError('WebSocket initialization failed')
-      return
+      return null
     }
 
     if (!newSocket) {
       console.error('WebSocket initialization returned null')
       setError('WebSocket not available')
-      return
+      return null
     }
+
+    return newSocket
+  }, [enabled, storeId, reconnectAttempts])
+
+  // Initialize WebSocket connection
+  useEffect(() => {
+    if (!enabled || !storeId) return
+
+    const newSocket = initializeWebSocket()
+    if (!newSocket) return
+
+    // Start heartbeat mechanism
+    const heartbeatInterval = startHeartbeat(newSocket)
 
     newSocket.on('connect', () => {
       console.log('🔗 WebSocket connected successfully')
       console.log('🏪 Joining store room:', storeId)
       setIsConnected(true)
       setError(null)
-      clearTimeout(connectionTimeout)
+      setReconnectAttempts(0) // Reset attempts on successful connection
+      setConnectionQuality('excellent')
       
       // Join store-specific room
       newSocket.emit('join-store', storeId)
       console.log('✅ Store join request sent')
     })
 
-    newSocket.on('disconnect', () => {
-      console.log('WebSocket disconnected')
+    newSocket.on('disconnect', (reason) => {
+      console.log('🔌 WebSocket disconnected:', reason)
       setIsConnected(false)
+      setConnectionQuality('disconnected')
+      
+      // Don't increment attempts for client-initiated disconnects
+      if (reason !== 'io client disconnect') {
+        setReconnectAttempts(prev => prev + 1)
+      }
     })
 
     newSocket.on('connect_error', (err) => {
-      console.error('WebSocket connection error:', err)
-      setError('Real-time updates unavailable (server connection failed)')
+      console.error('❌ WebSocket connection error:', err)
       setIsConnected(false)
+      setConnectionQuality('disconnected')
+      setReconnectAttempts(prev => prev + 1)
       
-      // Don't retry if it's a server connection issue
-      if (err.message?.includes('xhr poll error') || err.message?.includes('websocket error')) {
-        console.log('🚫 WebSocket server appears to be unavailable, disabling reconnection')
-        newSocket.disconnect()
+      // Set error message based on attempt count
+      if (reconnectAttempts < 3) {
+        setError('Reconnecting to real-time updates...')
+      } else if (reconnectAttempts < 10) {
+        setError('Connection unstable, retrying...')
+      } else {
+        setError('Real-time updates temporarily unavailable')
       }
     })
 
-    // Add connection timeout
-    const connectionTimeout = setTimeout(() => {
-      if (!isConnected) {
-        console.log('⏰ WebSocket connection timeout, giving up')
-        setError('Real-time updates unavailable (connection timeout)')
-        newSocket.disconnect()
-      }
-    }, 10000) // 10 second timeout
+    newSocket.on('reconnect', (attemptNumber) => {
+      console.log('🔄 WebSocket reconnected after', attemptNumber, 'attempts')
+      setReconnectAttempts(0)
+      setError(null)
+      setConnectionQuality('good')
+    })
+
+    newSocket.on('reconnect_attempt', (attemptNumber) => {
+      console.log('🔄 WebSocket reconnection attempt:', attemptNumber)
+      setError(`Reconnecting... (attempt ${attemptNumber})`)
+    })
 
     newSocket.on('reconnect_error', (err) => {
-      console.error('WebSocket reconnection error:', err)
-      setError('Unable to reconnect to real-time updates')
+      console.error('🔄❌ WebSocket reconnection error:', err)
+      setReconnectAttempts(prev => prev + 1)
     })
 
     newSocket.on('reconnect_failed', () => {
-      console.error('WebSocket reconnection failed after maximum attempts')
-      setError('Real-time updates unavailable - please refresh the page')
+      console.error('🔄❌ WebSocket reconnection failed after maximum attempts')
+      setError('Unable to establish real-time connection')
       setIsConnected(false)
+      setConnectionQuality('disconnected')
+    })
+
+    // Handle pong responses for latency monitoring
+    newSocket.on('pong', (pingTime: number) => {
+      const latency = Date.now() - pingTime
+      updateConnectionQuality(latency)
+      console.log(`🏓 WebSocket latency: ${latency}ms`)
+    })
+
+    // Handle server-initiated ping
+    newSocket.on('ping', () => {
+      newSocket.emit('pong')
     })
 
     // Listen for inventory changes
@@ -177,6 +262,36 @@ export function useWebSocketInventory({
           return newUpdates
         } else {
           console.log('➕ WebSocket: Added new product creation to updates array:', data.product.name)
+          return [...prevUpdates, inventoryUpdate]
+        }
+      })
+    })
+
+    // Listen for product updates (including discount price changes)
+    newSocket.on('product-updated', (data: { product: any, timestamp: string }) => {
+      console.log('🔔 WebSocket: Received product update:', data)
+      
+      // Add the updated product as an inventory update so existing logic can handle it
+      const inventoryUpdate: InventoryUpdate = {
+        productId: data.product._id,
+        quantity: data.product.quantity,
+        initialStock: data.product.initialStock,
+        timestamp: data.timestamp,
+        isNewProduct: false, // This is an existing product update
+        productData: data.product // Include full product data with discount price
+      }
+      
+      setUpdates(prevUpdates => {
+        // Update existing or add new
+        const existingIndex = prevUpdates.findIndex(update => update.productId === data.product._id)
+        
+        if (existingIndex >= 0) {
+          console.log('📝 WebSocket: Updating existing product:', data.product.name, 'discountPrice:', data.product.discountPrice)
+          const newUpdates = [...prevUpdates]
+          newUpdates[existingIndex] = { ...newUpdates[existingIndex], ...inventoryUpdate }
+          return newUpdates
+        } else {
+          console.log('➕ WebSocket: Added product update to updates array:', data.product.name)
           return [...prevUpdates, inventoryUpdate]
         }
       })
@@ -236,13 +351,17 @@ export function useWebSocketInventory({
     setSocket(newSocket)
 
     return () => {
-      console.log('Cleaning up WebSocket connection')
-      clearTimeout(connectionTimeout)
+      console.log('🧹 Cleaning up WebSocket connection')
+      clearInterval(heartbeatInterval)
+      if (reconnectTimeoutId) {
+        clearTimeout(reconnectTimeoutId)
+      }
       newSocket.close()
       setSocket(null)
       setIsConnected(false)
+      setConnectionQuality('disconnected')
     }
-  }, [enabled, storeId])
+  }, [enabled, storeId, initializeWebSocket])
 
   // Broadcast inventory update to other clients
   const broadcastInventoryUpdate = useCallback((productId: string, updates: Partial<InventoryUpdate>) => {
@@ -274,6 +393,8 @@ export function useWebSocketInventory({
     cartUpdates,
     isConnected,
     error,
+    connectionQuality,
+    reconnectAttempts,
     broadcastInventoryUpdate,
     broadcastCartUpdate
   }

@@ -71,22 +71,7 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
 
   useEffect(() => {
     if (order && isOpen) {
-      // Initialize cart with current order items - we'll need to fetch full product data
-      fetchProducts()
-      
-      // For now, create placeholder cart items that will be properly populated after products are fetched
-      const cartItems: CartItem[] = order.items.map(item => ({
-        product: {
-          _id: 'temp-' + item.productName, // Temporary ID until we fetch the real product
-          name: item.productName,
-          price: item.unitPrice,
-          quantity: 0, // Will be updated when we fetch products
-        },
-        quantity: item.quantity
-      }))
-      setCart(cartItems)
-
-      // Initialize order details
+      // Initialize order details first
       setOrderDetails({
         customerName: order.customerName || '',
         customerPhone: order.customerPhone || '',
@@ -97,9 +82,72 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
         discount: order.discount || 0
       })
 
-      fetchProducts()
+      // Initialize cart with current order items
+      initializeCartFromOrder()
     }
   }, [order, isOpen])
+
+  const initializeCartFromOrder = async () => {
+    if (!order) return
+
+    try {
+      // Fetch all products to get current stock information
+      const response = await fetch('/api/products?limit=1000')
+      const data = await response.json()
+      const allProducts = data.products || []
+
+      // Create cart items from order items, matching with actual product data
+      const cartItems: CartItem[] = []
+      
+      for (const orderItem of order.items) {
+        // Find the actual product by name (since we don't have product ID in order items)
+        const product = allProducts.find((p: Product) => p.name === orderItem.productName)
+        
+        if (product) {
+          cartItems.push({
+            product: {
+              _id: product._id,
+              name: product.name,
+              price: product.price,
+              quantity: product.quantity,
+              category: product.category,
+              cost: product.cost
+            },
+            quantity: orderItem.quantity
+          })
+        } else {
+          // If product not found, create a placeholder but mark it as unavailable
+          console.warn(`Product "${orderItem.productName}" not found in inventory`)
+          cartItems.push({
+            product: {
+              _id: 'missing-' + orderItem.productName,
+              name: orderItem.productName,
+              price: orderItem.unitPrice,
+              quantity: 0, // Mark as unavailable
+              category: 'Unknown',
+              cost: 0
+            },
+            quantity: orderItem.quantity
+          })
+        }
+      }
+      
+      setCart(cartItems)
+    } catch (error) {
+      console.error('Error initializing cart from order:', error)
+      // Fallback to basic cart initialization
+      const cartItems: CartItem[] = order.items.map(item => ({
+        product: {
+          _id: 'temp-' + item.productName,
+          name: item.productName,
+          price: item.unitPrice,
+          quantity: 0,
+        },
+        quantity: item.quantity
+      }))
+      setCart(cartItems)
+    }
+  }
 
   const fetchProducts = async () => {
     try {
@@ -144,8 +192,11 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
   }
 
   const updateCartQuantity = (productId: string, newQuantity: number) => {
+    console.log(`Updating cart quantity for ${productId}: ${newQuantity}`)
+    
     if (newQuantity === 0) {
       setCart(cart.filter(item => item.product._id !== productId))
+      console.log(`Removed item ${productId} from cart`)
     } else {
       // Validate stock availability
       const product = products.find(p => p._id === productId)
@@ -161,11 +212,14 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
           ? { ...item, quantity: newQuantity }
           : item
       ))
+      console.log(`Updated quantity for ${productId} to ${newQuantity}`)
     }
   }
 
   const removeFromCart = (productId: string) => {
+    console.log(`Removing item ${productId} from cart`)
     setCart(cart.filter(item => item.product._id !== productId))
+    console.log(`Cart after removal:`, cart.filter(item => item.product._id !== productId))
   }
 
   const calculateTotals = () => {
@@ -179,10 +233,23 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
 
     setLoading(true)
     try {
-      const items = cart.map(item => ({
-        productId: item.product._id,
-        quantity: item.quantity
-      }))
+      // Filter out items with quantity 0 (removed items) and validate product IDs
+      const items = cart
+        .filter(item => item.quantity > 0) // Only include items with quantity > 0
+        .map(item => ({
+          productId: item.product._id,
+          quantity: item.quantity
+        }))
+        .filter(item => !item.productId.startsWith('temp-') && !item.productId.startsWith('missing-')) // Exclude temporary/missing products
+
+      // Check if we have any valid items
+      if (items.length === 0) {
+        error('Cannot update order with no items. Please add at least one product.', 'Invalid Update')
+        setLoading(false)
+        return
+      }
+
+      console.log('Updating order with items:', items)
 
       const response = await fetch(`/api/sales/${order._id}`, {
         method: 'PUT',
@@ -201,11 +268,14 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
       })
 
       if (response.ok) {
+        const updatedOrder = await response.json()
+        console.log('Order updated successfully:', updatedOrder)
         success('Order updated successfully!', 'Order Updated')
         onUpdate()
         onClose()
       } else {
         const errorData = await response.json()
+        console.error('Error updating order:', errorData)
         error(errorData.message || 'Error updating order', 'Update Failed')
       }
     } catch (err) {
@@ -330,45 +400,107 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
                 <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-slate-100">Order Items</h3>
                 
                 <div className="space-y-3 mb-6">
-                  {cart.map((item) => (
-                    <div
-                      key={item.product._id}
-                      className="border border-gray-200 dark:border-slate-600 rounded-lg p-3 bg-white dark:bg-slate-700"
-                    >
-                      <div className="flex justify-between items-center">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900 dark:text-slate-100">{item.product.name}</h4>
-                          <p className="text-sm text-gray-600 dark:text-slate-400">₱{item.product.price.toFixed(2)} each</p>
+                  {cart.map((item) => {
+                    const isMissing = item.product._id.startsWith('missing-')
+                    const isTemp = item.product._id.startsWith('temp-')
+                    const isUnavailable = item.product.quantity === 0 && !isMissing && !isTemp
+                    
+                    return (
+                      <div
+                        key={item.product._id}
+                        className={`border rounded-lg p-3 ${
+                          isMissing || isTemp || isUnavailable 
+                            ? 'border-red-300 dark:border-red-600 bg-red-50 dark:bg-red-900/20' 
+                            : 'border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div className="flex-1">
+                            <h4 className={`font-medium ${
+                              isMissing || isTemp || isUnavailable 
+                                ? 'text-red-800 dark:text-red-200' 
+                                : 'text-gray-900 dark:text-slate-100'
+                            }`}>
+                              {item.product.name}
+                              {(isMissing || isTemp) && (
+                                <span className="ml-2 text-xs bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200 px-2 py-1 rounded">
+                                  Product Not Found
+                                </span>
+                              )}
+                              {isUnavailable && (
+                                <span className="ml-2 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded">
+                                  Out of Stock
+                                </span>
+                              )}
+                            </h4>
+                            <p className={`text-sm ${
+                              isMissing || isTemp || isUnavailable 
+                                ? 'text-red-600 dark:text-red-400' 
+                                : 'text-gray-600 dark:text-slate-400'
+                            }`}>
+                              ₱{item.product.price.toFixed(2)} each
+                              {!isMissing && !isTemp && (
+                                <span className="ml-2">• Stock: {item.product.quantity}</span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => updateCartQuantity(item.product._id, item.quantity - 1)}
+                              disabled={isMissing || isTemp}
+                              className={`w-8 h-8 rounded ${
+                                isMissing || isTemp
+                                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 cursor-not-allowed'
+                                  : 'bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-300 dark:hover:bg-slate-500'
+                              }`}
+                            >
+                              -
+                            </button>
+                            <span className={`w-12 text-center ${
+                              isMissing || isTemp || isUnavailable 
+                                ? 'text-red-800 dark:text-red-200' 
+                                : 'text-gray-900 dark:text-slate-100'
+                            }`}>
+                              {item.quantity}
+                            </span>
+                            <button
+                              onClick={() => updateCartQuantity(item.product._id, item.quantity + 1)}
+                              disabled={isMissing || isTemp || isUnavailable}
+                              className={`w-8 h-8 rounded ${
+                                isMissing || isTemp || isUnavailable
+                                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-400 cursor-not-allowed'
+                                  : 'bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-300 dark:hover:bg-slate-500'
+                              }`}
+                            >
+                              +
+                            </button>
+                            <button
+                              onClick={() => removeFromCart(item.product._id)}
+                              className="bg-red-500 text-white w-8 h-8 rounded hover:bg-red-600 ml-2"
+                            >
+                              ×
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => updateCartQuantity(item.product._id, item.quantity - 1)}
-                            className="bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-300 w-8 h-8 rounded hover:bg-gray-300 dark:hover:bg-slate-500"
-                          >
-                            -
-                          </button>
-                          <span className="w-12 text-center text-gray-900 dark:text-slate-100">{item.quantity}</span>
-                          <button
-                            onClick={() => updateCartQuantity(item.product._id, item.quantity + 1)}
-                            className="bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-300 w-8 h-8 rounded hover:bg-gray-300 dark:hover:bg-slate-500"
-                          >
-                            +
-                          </button>
-                          <button
-                            onClick={() => removeFromCart(item.product._id)}
-                            className="bg-red-500 text-white w-8 h-8 rounded hover:bg-red-600 ml-2"
-                          >
-                            ×
-                          </button>
+                        <div className="mt-2 text-right">
+                          <span className={`font-semibold ${
+                            isMissing || isTemp || isUnavailable 
+                              ? 'text-red-800 dark:text-red-200' 
+                              : 'text-gray-900 dark:text-slate-100'
+                          }`}>
+                            ₱{(item.product.price * item.quantity).toFixed(2)}
+                          </span>
                         </div>
                       </div>
-                      <div className="mt-2 text-right">
-                        <span className="font-semibold text-gray-900 dark:text-slate-100">
-                          ₱{(item.product.price * item.quantity).toFixed(2)}
-                        </span>
-                      </div>
+                    )
+                  })}
+                  
+                  {cart.length === 0 && (
+                    <div className="text-center py-8 text-gray-500 dark:text-slate-400">
+                      <p>No items in this order.</p>
+                      <p className="text-sm mt-1">Add products from the left panel.</p>
                     </div>
-                  ))}
+                  )}
                 </div>
 
                 {/* Tax and Discount */}
@@ -415,10 +547,10 @@ export default function OrderEditModal({ order, isOpen, onClose, onUpdate }: Ord
 
                 <button
                   onClick={handleUpdateItems}
-                  disabled={loading || cart.length === 0}
+                  disabled={loading || cart.filter(item => item.quantity > 0 && !item.product._id.startsWith('temp-') && !item.product._id.startsWith('missing-')).length === 0}
                   className="w-full mt-4 bg-green-600 text-white py-2 rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Updating...' : 'Update Items'}
+                  {loading ? 'Updating...' : `Update Items (${cart.filter(item => item.quantity > 0 && !item.product._id.startsWith('temp-') && !item.product._id.startsWith('missing-')).length} products)`}
                 </button>
               </div>
             </div>

@@ -3,6 +3,7 @@ import connectToDatabase from '@/lib/mongodb'
 import Sale from '@/models/Sale'
 import Product from '@/models/Product'
 import { authenticateRequest } from '@/lib/auth'
+import { createAuditLog } from '@/lib/audit-logger'
 
 // GET /api/sales/[id] - Get sale by ID
 export async function GET(
@@ -174,11 +175,36 @@ async function handleUpdateItems(sale: any, updateData: any) {
       await session.withTransaction(async () => {
         // Restore original product quantities
         for (const item of sale.items) {
-          await Product.findByIdAndUpdate(
-            item.product,
-            { $inc: { quantity: item.quantity } },
-            { session }
-          )
+          const product = await Product.findById(item.product).session(session)
+          if (product) {
+            await Product.findByIdAndUpdate(
+              item.product,
+              { $inc: { quantity: item.quantity } },
+              { session }
+            )
+            
+            // Create audit log for quantity restoration
+            await createAuditLog({
+              productId: item.product.toString(),
+              productName: product.name,
+              storeId: sale.storeId.toString(),
+              storeName: sale.storeName || 'Store',
+              action: 'restock',
+              quantityChange: item.quantity,
+              previousQuantity: product.quantity,
+              newQuantity: product.quantity + item.quantity,
+              reason: 'Order items updated - original quantities restored',
+              orderId: sale._id.toString(),
+              customerName: sale.customerName || 'Customer',
+              cashier: sale.cashier || 'Admin',
+              userId: (authContext as any).user?._id?.toString(),
+              metadata: {
+                orderType: 'sale',
+                paymentStatus: sale.paymentStatus,
+                notes: 'Quantity restored during order update'
+              }
+            })
+          }
         }
         
         // Validate and prepare new items
@@ -250,11 +276,36 @@ async function handleUpdateItems(sale: any, updateData: any) {
         
         // Update new product quantities
         for (const item of items) {
-          await Product.findByIdAndUpdate(
-            item.productId,
-            { $inc: { quantity: -item.quantity } },
-            { session }
-          )
+          const product = await Product.findById(item.productId).session(session)
+          if (product) {
+            await Product.findByIdAndUpdate(
+              item.productId,
+              { $inc: { quantity: -item.quantity } },
+              { session }
+            )
+            
+            // Create audit log for new quantity deduction
+            await createAuditLog({
+              productId: item.productId,
+              productName: product.name,
+              storeId: sale.storeId.toString(),
+              storeName: sale.storeName || 'Store',
+              action: 'sale',
+              quantityChange: -item.quantity,
+              previousQuantity: product.quantity,
+              newQuantity: product.quantity - item.quantity,
+              reason: 'Order items updated - new quantities deducted',
+              orderId: sale._id.toString(),
+              customerName: sale.customerName || 'Customer',
+              cashier: sale.cashier || 'Admin',
+              userId: (authContext as any).user?._id?.toString(),
+              metadata: {
+                orderType: 'sale',
+                paymentStatus: sale.paymentStatus,
+                notes: 'Quantity deducted during order update'
+              }
+            })
+          }
         }
       })
       
@@ -280,10 +331,35 @@ async function handleUpdateItems(sale: any, updateData: any) {
   if (!useTransaction) {
     // Restore original product quantities
     for (const item of sale.items) {
-      await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { quantity: item.quantity } }
-      )
+      const product = await Product.findById(item.product)
+      if (product) {
+        await Product.findByIdAndUpdate(
+          item.product,
+          { $inc: { quantity: item.quantity } }
+        )
+        
+        // Create audit log for quantity restoration
+        await createAuditLog({
+          productId: item.product.toString(),
+          productName: product.name,
+          storeId: sale.storeId.toString(),
+          storeName: sale.storeName || 'Store',
+          action: 'restock',
+          quantityChange: item.quantity,
+          previousQuantity: product.quantity,
+          newQuantity: product.quantity + item.quantity,
+          reason: 'Order items updated - original quantities restored (fallback)',
+          orderId: sale._id.toString(),
+          customerName: sale.customerName || 'Customer',
+          cashier: sale.cashier || 'Admin',
+          userId: (authContext as any).user?._id?.toString(),
+          metadata: {
+            orderType: 'sale',
+            paymentStatus: sale.paymentStatus,
+            notes: 'Quantity restored during order update (fallback)'
+          }
+        })
+      }
     }
     
     // Validate and prepare new items
@@ -363,10 +439,35 @@ async function handleUpdateItems(sale: any, updateData: any) {
     
     // Update new product quantities
     for (const item of items) {
-      await Product.findByIdAndUpdate(
-        item.productId,
-        { $inc: { quantity: -item.quantity } }
-      )
+      const product = await Product.findById(item.productId)
+      if (product) {
+        await Product.findByIdAndUpdate(
+          item.productId,
+          { $inc: { quantity: -item.quantity } }
+        )
+        
+        // Create audit log for new quantity deduction
+        await createAuditLog({
+          productId: item.productId,
+          productName: product.name,
+          storeId: sale.storeId.toString(),
+          storeName: sale.storeName || 'Store',
+          action: 'sale',
+          quantityChange: -item.quantity,
+          previousQuantity: product.quantity,
+          newQuantity: product.quantity - item.quantity,
+          reason: 'Order items updated - new quantities deducted (fallback)',
+          orderId: sale._id.toString(),
+          customerName: sale.customerName || 'Customer',
+          cashier: sale.cashier || 'Admin',
+          userId: (authContext as any).user?._id?.toString(),
+          metadata: {
+            orderType: 'sale',
+            paymentStatus: sale.paymentStatus,
+            notes: 'Quantity deducted during order update (fallback)'
+          }
+        })
+      }
     }
     
     // console.log('✅ Sale items updated without transaction')

@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import Layout from '@/components/Layout'
 import { Plus, Edit, Trash2 } from 'lucide-react'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function CashiersPage() {
   const { store } = useAuth()
@@ -172,12 +173,7 @@ export default function CashiersPage() {
 
         {/* Cashiers List */}
         <div className="backdrop-blur-md bg-white/90 dark:bg-slate-900/90 rounded-xl border border-slate-200/50 dark:border-slate-700/50 shadow-lg max-h-[60vh] overflow-auto">
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-              <p className="mt-2 text-slate-500 dark:text-slate-400">Loading cashiers...</p>
-            </div>
-          ) : cashiers.length === 0 ? (
+          {cashiers.length === 0 && !loading ? (
             <div className="p-8 text-center">
               <p className="text-slate-500 dark:text-slate-400">No cashiers added yet</p>
               <button
@@ -299,6 +295,14 @@ export default function CashiersPage() {
           </div>
         )}
       </div>
+
+      {/* Loading Overlay */}
+      <LoadingOverlay
+        isVisible={loading}
+        title="Loading Cashiers"
+        message="Fetching cashier accounts and permissions..."
+        color="green"
+      />
     </Layout>
   )
 }

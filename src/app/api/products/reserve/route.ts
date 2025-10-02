@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectToDatabase from '@/lib/mongodb'
 import Product from '@/models/Product'
 import { authenticateCustomerRequest } from '@/lib/auth'
+import { createAuditLog } from '@/lib/audit-logger'
 
 // POST /api/products/reserve - Reserve or release stock for cart items (simplified schema)
 export async function POST(request: NextRequest) {
@@ -105,7 +106,25 @@ export async function POST(request: NextRequest) {
       }
       
       // AUDIT: Log stock reservation
-      console.log(`📦 AUDIT: Stock reserved - Product: ${updatedProduct.name}, Quantity: ${quantity}, New Stock: ${updatedProduct.quantity}`)
+      await createAuditLog({
+        productId: productId,
+        productName: updatedProduct.name,
+        storeId: customerAuth.store._id.toString(),
+        storeName: customerAuth.store.storeName,
+        action: 'reservation',
+        quantityChange: -quantity,
+        previousQuantity: product.quantity,
+        newQuantity: updatedProduct.quantity,
+        reason: 'Customer reservation via public store',
+        customerName: customerAuth.user?.name || 'Customer',
+        userId: customerAuth.user?._id?.toString(),
+        metadata: {
+          orderType: 'reservation',
+          customerPhone: customerAuth.user?.phone,
+          customerEmail: customerAuth.user?.email,
+          notes: 'Stock reserved for customer cart'
+        }
+      })
       
       // Broadcast inventory update via WebSocket
       if ((global as any).io) {
@@ -154,7 +173,25 @@ export async function POST(request: NextRequest) {
       }
       
       // AUDIT: Log stock release
-      console.log(`📦 AUDIT: Stock released - Product: ${updatedProduct.name}, Quantity: ${quantity}, New Stock: ${updatedProduct.quantity}`)
+      await createAuditLog({
+        productId: productId,
+        productName: updatedProduct.name,
+        storeId: customerAuth.store._id.toString(),
+        storeName: customerAuth.store.storeName,
+        action: 'cancellation',
+        quantityChange: quantity,
+        previousQuantity: product.quantity,
+        newQuantity: updatedProduct.quantity,
+        reason: 'Customer reservation cancelled/released',
+        customerName: customerAuth.user?.name || 'Customer',
+        userId: customerAuth.user?._id?.toString(),
+        metadata: {
+          orderType: 'reservation',
+          customerPhone: customerAuth.user?.phone,
+          customerEmail: customerAuth.user?.email,
+          notes: 'Stock released from customer cart'
+        }
+      })
       
       // Broadcast inventory update via WebSocket
       if ((global as any).io) {

@@ -8,6 +8,8 @@ import { useToast } from '@/contexts/ToastContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { ConfirmationModal } from '@/components/Modal'
 import { useWebSocketInventory } from '@/hooks/useWebSocketInventory'
+import LoadingOverlay from '@/components/LoadingOverlay'
+import WebSocketStatus from '@/components/WebSocketStatus'
 
 interface SaleItem {
   productName: string
@@ -51,11 +53,14 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
+  const [exportLoading, setExportLoading] = useState(false)
   
   // Real-time order updates via WebSocket with error handling
   const { 
     isConnected: isWebSocketConnected,
-    error: webSocketError
+    error: webSocketError,
+    connectionQuality,
+    reconnectAttempts
   } = useWebSocketInventory({
     storeId: store?.id || null,
     enabled: !!store?.id
@@ -79,16 +84,23 @@ export default function OrdersPage() {
   }, [deleting])
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [customerNameFilter, setCustomerNameFilter] = useState('')
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('all')
+  const [productFilter, setProductFilter] = useState<string>('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [sortBy, setSortBy] = useState<'createdAt' | 'finalAmount' | 'customerName'>('createdAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [showFilters, setShowFilters] = useState(false)
   
+  // Product options for filter
+  const [productOptions, setProductOptions] = useState<Array<{_id: string, name: string}>>([])
+  
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [itemsPerPage, setItemsPerPage] = useState(20)
   const [totalOrders, setTotalOrders] = useState(0)
+  const [totalAmount, setTotalAmount] = useState(0)
   const [paymentModal, setPaymentModal] = useState(false)
   const [orderEditModal, setOrderEditModal] = useState(false)
   const [confirmModal, setConfirmModal] = useState<{
@@ -126,6 +138,30 @@ export default function OrdersPage() {
     }
   }, [store?.selectedCashier])
 
+  // Fetch products for filter dropdown
+  const fetchProducts = useCallback(async () => {
+    try {
+      const response = await fetch('/api/products')
+      const data = await response.json()
+      console.log('🛍️ Orders: Fetched products for filter:', data.products?.length || 0)
+      if (data.products) {
+        const mappedProducts = data.products.map((product: any) => ({
+          _id: product._id,
+          name: product.name
+        }))
+        console.log('🛍️ Orders: Mapped products:', mappedProducts.slice(0, 3)) // Show first 3 for debugging
+        setProductOptions(mappedProducts)
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error)
+    }
+  }, [])
+
+  // Fetch products when component mounts
+  useEffect(() => {
+    fetchProducts()
+  }, [fetchProducts])
+
   // Define fetchOrders function before it's used in useEffect
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -134,12 +170,21 @@ export default function OrdersPage() {
       params.append('limit', itemsPerPage.toString())
       params.append('page', currentPage.toString())
       
-      if (filterStatus !== 'all') {
-        params.append('paymentStatus', filterStatus)
+      if (paymentStatusFilter !== 'all') {
+        params.append('paymentStatus', paymentStatusFilter)
       }
       
       if (searchTerm.trim()) {
         params.append('search', searchTerm)
+      }
+      
+      if (customerNameFilter.trim()) {
+        params.append('customerName', customerNameFilter)
+      }
+      
+      if (productFilter !== 'all') {
+        console.log('🔍 Orders: Adding product filter to API call:', productFilter)
+        params.append('productId', productFilter)
       }
       
       if (dateFrom) {
@@ -159,12 +204,13 @@ export default function OrdersPage() {
       
       setOrders(data.sales || [])
       setTotalOrders(data.total || 0)
+      setTotalAmount(data.totalAmount || 0)
     } catch (error) {
       console.error('Error fetching orders:', error)
     } finally {
       setLoading(false)
     }
-  }, [filterStatus, searchTerm, dateFrom, dateTo, sortBy, sortOrder, currentPage, itemsPerPage])
+  }, [paymentStatusFilter, searchTerm, customerNameFilter, productFilter, dateFrom, dateTo, sortBy, sortOrder, currentPage, itemsPerPage])
 
   // Call fetchOrders when component mounts or dependencies change
   useEffect(() => {
@@ -387,8 +433,10 @@ ${itemsList}
   }
 
   const handleOrderUpdate = () => {
+    // Refresh the orders list to show updated data
     fetchOrders()
     setSelectedOrder(null)
+    console.log('Order updated, refreshing orders list')
   }
 
   const showConfirmation = (
@@ -420,8 +468,10 @@ ${itemsList}
   }
 
   const clearFilters = () => {
-    setFilterStatus('all')
+    setPaymentStatusFilter('all')
     setSearchTerm('')
+    setCustomerNameFilter('')
+    setProductFilter('all')
     setDateFrom('')
     setDateTo('')
     setSortBy('createdAt')
@@ -450,6 +500,157 @@ ${itemsList}
     setDateTo(monthEnd.toISOString().split('T')[0])
   }
 
+  const handleExportOrders = async () => {
+    try {
+      setExportLoading(true)
+      
+      // Build the same parameters as fetchOrders but without pagination
+      const params = new URLSearchParams()
+      
+      if (paymentStatusFilter !== 'all') {
+        params.append('paymentStatus', paymentStatusFilter)
+      }
+      
+      if (searchTerm.trim()) {
+        params.append('search', searchTerm)
+      }
+      
+      if (customerNameFilter.trim()) {
+        params.append('customerName', customerNameFilter)
+      }
+      
+      if (productFilter !== 'all') {
+        params.append('productId', productFilter)
+      }
+      
+      if (dateFrom) {
+        params.append('startDate', dateFrom)
+      }
+      
+      if (dateTo) {
+        params.append('endDate', dateTo)
+      }
+      
+      if (sortBy && sortOrder) {
+        params.append('sort', `${sortOrder === 'desc' ? '-' : ''}${sortBy}`)
+      }
+
+      // Add export flag to get all data without pagination
+      params.append('export', 'true')
+
+      console.log('📊 Orders: Exporting with filters:', Object.fromEntries(params))
+
+      const response = await fetch(`/api/sales?${params}`)
+      const data = await response.json()
+      
+      if (data.sales && data.sales.length > 0) {
+        // Convert orders to CSV
+        const csvData = convertOrdersToCSV(data.sales)
+        
+        // Create and download the file
+        const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' })
+        const link = document.createElement('a')
+        const url = URL.createObjectURL(blob)
+        link.setAttribute('href', url)
+        
+        // Generate filename with current date and filter info
+        const now = new Date()
+        const dateStr = now.toISOString().split('T')[0]
+        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-')
+        let filename = `orders-export-${dateStr}-${timeStr}`
+        
+        // Add filter info to filename
+        if (paymentStatusFilter !== 'all') filename += `-${paymentStatusFilter}`
+        if (dateFrom && dateTo) filename += `-${dateFrom}-to-${dateTo}`
+        else if (dateFrom) filename += `-from-${dateFrom}`
+        else if (dateTo) filename += `-until-${dateTo}`
+        
+        link.setAttribute('download', `${filename}.csv`)
+        link.style.visibility = 'hidden'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+        success(`Successfully exported ${data.sales.length} orders to CSV`, 'Export Complete')
+      } else {
+        error('No orders found to export', 'Export Failed')
+      }
+    } catch (err) {
+      console.error('Error exporting orders:', err)
+      error('Failed to export orders', 'Export Failed')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
+  const convertOrdersToCSV = (orders: Order[]) => {
+    // CSV Headers
+    const headers = [
+      'Order ID',
+      'Date Created',
+      'Customer Name',
+      'Customer Phone',
+      'Customer Email',
+      'Items Count',
+      'Product Names',
+      'Quantities',
+      'Subtotal (PHP)',
+      'Tax (PHP)',
+      'Discount (PHP)',
+      'Final Amount (PHP)',
+      'Amount Paid (PHP)',
+      'Amount Due (PHP)',
+      'Payment Status',
+      'Payment Method',
+      'Due Date',
+      'Cashier',
+      'Status',
+      'Notes'
+    ]
+
+    // Helper function to format currency as number for CSV
+    const formatCurrencyForCSV = (amount: number | undefined | null) => {
+      if (amount === null || amount === undefined || isNaN(amount)) {
+        return '0.00'
+      }
+      return amount.toFixed(2)
+    }
+
+    // Convert orders to CSV rows
+    const rows = orders.map(order => {
+      const productNames = order.items.map(item => item.productName).join('; ')
+      const quantities = order.items.map(item => `${item.productName}: ${item.quantity}`).join('; ')
+      
+      return [
+        `"${order._id}"`,
+        `"${formatDate(order.createdAt)}"`,
+        `"${order.customerName || 'Walk-in Customer'}"`,
+        `"${order.customerPhone || ''}"`,
+        `"${order.customerEmail || ''}"`,
+        order.items.length,
+        `"${productNames}"`,
+        `"${quantities}"`,
+        formatCurrencyForCSV(order.subtotal),
+        formatCurrencyForCSV(order.tax),
+        formatCurrencyForCSV(order.discount),
+        formatCurrencyForCSV(order.finalAmount),
+        formatCurrencyForCSV(order.amountPaid),
+        formatCurrencyForCSV(order.amountDue),
+        `"${isOverdue(order) ? 'Overdue' : order.paymentStatus}"`,
+        `"${order.paymentMethod}"`,
+        `"${order.dueDate ? formatDate(order.dueDate) : 'No due date'}"`,
+        `"${order.cashier || 'N/A'}"`,
+        `"${order.status}"`,
+        `"${order.notes || ''}"`
+      ]
+    })
+
+    // Combine headers and rows
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
+    
+    return csvContent
+  }
+
   // Pagination helpers
   const totalPages = Math.ceil(totalOrders / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage + 1
@@ -467,7 +668,7 @@ ${itemsList}
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [filterStatus, searchTerm, dateFrom, dateTo, sortBy, sortOrder])
+  }, [paymentStatusFilter, searchTerm, customerNameFilter, productFilter, dateFrom, dateTo, sortBy, sortOrder])
 
   return (
     <ProtectedRoute>
@@ -476,7 +677,15 @@ ${itemsList}
           {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Order Management</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Order Management</h1>
+              <WebSocketStatus
+                isConnected={isWebSocketConnected}
+                connectionQuality={connectionQuality}
+                error={webSocketError}
+                reconnectAttempts={reconnectAttempts}
+              />
+            </div>
             <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Manage orders, payments, and modifications</p>
           </div>
           
@@ -503,6 +712,28 @@ ${itemsList}
               )}
             </button>
             <button
+              onClick={handleExportOrders}
+              disabled={exportLoading || totalOrders === 0}
+              className="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {exportLoading ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Export CSV
+                </>
+              )}
+            </button>
+            <button
               onClick={clearFilters}
               className="px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors flex items-center gap-2"
             >
@@ -514,72 +745,73 @@ ${itemsList}
           </div>
         </div>
 
-        {/* Modern Search Bar */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-center">
-            <div className="flex-1 relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by customer name, order ID, or product name..."
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500 dark:placeholder-slate-400"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                >
-                  <svg className="h-5 w-5 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600 dark:text-slate-400">
-                {totalOrders > 0 ? `${startIndex}-${endIndex} of ${totalOrders}` : '0 orders'}
-              </span>
-              <select
-                value={itemsPerPage}
-                onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              >
-                <option value={5}>5 per page</option>
-                <option value={10}>10 per page</option>
-                <option value={25}>25 per page</option>
-                <option value={50}>50 per page</option>
-                <option value={100}>100 per page</option>
-              </select>
-            </div>
-          </div>
-        </div>
 
         {/* Advanced Filters */}
         {showFilters && (
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl border-2 border-blue-200 dark:border-blue-700/50 p-6 backdrop-blur-sm bg-gradient-to-br from-blue-50/50 to-indigo-50/30 dark:from-slate-800/90 dark:to-slate-700/90 ring-1 ring-blue-100 dark:ring-blue-800/30">
+            {/* Filter Header */}
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-blue-200/50 dark:border-blue-700/30">
+              <div className="flex items-center justify-center w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg shadow-sm">
+                <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Advanced Filters</h3>
+                <p className="text-sm text-gray-600 dark:text-slate-400">Refine your search with detailed criteria</p>
+              </div>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
 
-              {/* Payment Status */}
+              {/* Customer Name Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Customer Name
+                </label>
+                <input
+                  type="text"
+                  value={customerNameFilter}
+                  onChange={(e) => setCustomerNameFilter(e.target.value)}
+                  placeholder="Enter customer name..."
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Payment Status Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                   Payment Status
                 </label>
                 <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
+                  value={paymentStatusFilter}
+                  onChange={(e) => setPaymentStatusFilter(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="all">All Orders</option>
+                  <option value="all">All Payment Status</option>
                   <option value="pending">Pending Payment</option>
                   <option value="partial">Partial Payment</option>
                   <option value="paid">Paid</option>
                   <option value="overdue">Overdue</option>
+                </select>
+              </div>
+
+              {/* Product Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Product
+                </label>
+                <select
+                  value={productFilter}
+                  onChange={(e) => setProductFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Products</option>
+                  {productOptions.map((product) => (
+                    <option key={product._id} value={product._id}>
+                      {product.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -642,24 +874,29 @@ ${itemsList}
             </div>
 
             {/* Quick Date Filters */}
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-600">
-              <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Quick Date Filters:</p>
+            <div className="mt-6 pt-6 border-t border-blue-200/50 dark:border-blue-700/30">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">Quick Date Filters:</p>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={setTodayFilter}
-                  className="px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                  className="px-4 py-2 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-all duration-200 shadow-sm hover:shadow-md border border-blue-200/50 dark:border-blue-800/30 font-medium"
                 >
                   Today
                 </button>
                 <button
                   onClick={setThisWeekFilter}
-                  className="px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                  className="px-4 py-2 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-all duration-200 shadow-sm hover:shadow-md border border-blue-200/50 dark:border-blue-800/30 font-medium"
                 >
                   This Week
                 </button>
                 <button
                   onClick={setThisMonthFilter}
-                  className="px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                  className="px-4 py-2 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-all duration-200 shadow-sm hover:shadow-md border border-blue-200/50 dark:border-blue-800/30 font-medium"
                 >
                   This Month
                 </button>
@@ -668,16 +905,112 @@ ${itemsList}
           </div>
         )}
 
+        {/* Modern Search Bar */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-4">
+          <div className="flex flex-col sm:flex-row gap-4 items-center">
+            <div className="flex-1 relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by order ID or product name..."
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500 dark:placeholder-slate-400"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                >
+                  <svg className="h-5 w-5 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600 dark:text-slate-400">
+                {totalOrders > 0 ? `${startIndex}-${endIndex} of ${totalOrders}` : '0 orders'}
+              </span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value={5}>5 per page</option>
+                <option value={10}>10 per page</option>
+                <option value={20}>20 per page</option>
+                <option value={25}>25 per page</option>
+                <option value={50}>50 per page</option>
+                <option value={100}>100 per page</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         {/* Orders Table */}
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
-          {loading ? (
-            <div className="p-8 text-center text-gray-600 dark:text-slate-400">Loading orders...</div>
-          ) : orders.length === 0 ? (
+          {orders.length === 0 && !loading ? (
             <div className="p-8 text-center text-gray-500 dark:text-slate-400">
               No orders found.
             </div>
           ) : (
             <>
+              {/* Dynamic Total Display */}
+              <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-600 border-b border-gray-200 dark:border-slate-600">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center justify-center w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                      <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
+                        {totalOrders.toLocaleString()} Orders Found
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-slate-400">
+                        {totalOrders === 1 ? '1 order' : `${totalOrders.toLocaleString()} orders`} 
+                        {searchTerm || customerNameFilter || paymentStatusFilter !== 'all' || dateFrom || dateTo ? ' matching your filters' : ' total'}
+                      </p>
+                      <div className="flex items-center space-x-1 mt-1">
+                        <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                        </svg>
+                        <p className="text-sm font-medium text-green-600 dark:text-green-400">
+                          Total Amount: {formatCurrency(totalAmount)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Filter Status Indicators */}
+                  <div className="flex items-center space-x-2">
+                    {(searchTerm || customerNameFilter || paymentStatusFilter !== 'all' || dateFrom || dateTo) && (
+                      <div className="flex items-center space-x-1 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                        <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
+                        <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Filtered</span>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center space-x-1 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 rounded-full">
+                      <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                        Page {currentPage} of {Math.ceil(totalOrders / itemsPerPage)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Desktop Table */}
               <div className="hidden md:block">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
@@ -1447,6 +1780,22 @@ ${itemsList}
           type={confirmModal.type}
           confirmText={confirmModal.confirmText}
           cancelText={confirmModal.cancelText}
+        />
+
+        {/* Main Loading Overlay */}
+        <LoadingOverlay
+          isVisible={loading}
+          title="Loading Orders"
+          message="Fetching order data with applied filters..."
+          color="blue"
+        />
+
+        {/* Export Loading Overlay */}
+        <LoadingOverlay
+          isVisible={exportLoading}
+          title="Exporting Orders"
+          message="Generating CSV file with filtered data..."
+          color="green"
         />
       </div>
     </Layout>

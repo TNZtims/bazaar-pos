@@ -192,7 +192,9 @@ export async function POST(request: NextRequest) {
     await connectToDatabase()
     
     const body = await request.json()
-    const { name, price, cost, quantity, description, category, sku, seller, imageUrl } = body
+    const { name, price, discountPrice, cost, quantity, initialStock, description, category, sku, seller, imageUrl } = body
+    
+    console.log('🆕 Creating new product with:', { name, quantity, initialStock })
     
     // Validation
     if (!name || !price || quantity === undefined) {
@@ -205,8 +207,10 @@ export async function POST(request: NextRequest) {
     const product = new Product({
       name,
       price,
+      discountPrice: (discountPrice && parseFloat(discountPrice) > 0) ? parseFloat(discountPrice) : null,
       cost,
       quantity: quantity || 0,
+      initialStock: initialStock !== undefined ? initialStock : null, // Use initialStock if provided, otherwise null (standalone note field)
       availableForPreorder: true,
       description,
       category,
@@ -241,6 +245,7 @@ export async function POST(request: NextRequest) {
             _id: (savedProduct._id as any).toString(),
             name: savedProduct.name,
             price: savedProduct.price,
+            discountPrice: savedProduct.discountPrice,
             cost: savedProduct.cost,
             quantity: savedProduct.quantity,
             availableForPreorder: savedProduct.availableForPreorder,

@@ -89,12 +89,13 @@ const Layout = ({ children }: LayoutProps) => {
     { name: 'Products', href: '/products', icon: '📦', gradient: 'from-green-500 to-teal-600' },
     { name: 'Create a Sale', href: '/sales', icon: '💰', gradient: 'from-yellow-500 to-orange-600' },
     { name: 'Orders', href: '/orders', icon: '📋', gradient: 'from-purple-500 to-indigo-600' },
+    { name: 'Audit Trail', href: '/audit-trail', icon: '🔍', gradient: 'from-amber-500 to-orange-600' },
     { name: 'Users', href: '/users', icon: '👥', gradient: 'from-cyan-500 to-blue-600' },
     { name: 'Cashiers', href: '/cashiers', icon: '💼', gradient: 'from-emerald-500 to-teal-600' },
     ...(store?.isAdmin ? [
       { name: 'Store Management', href: '/admin/stores', icon: '🏪', gradient: 'from-violet-500 to-purple-600' }
     ] : []),
-    { name: 'Sales History', href: '/sales/history', icon: '📊', gradient: 'from-indigo-500 to-purple-600' },
+    // { name: 'Sales History', href: '/sales/history', icon: '📊', gradient: 'from-indigo-500 to-purple-600' }, // Hidden
     { name: 'Reports', href: '/reports', icon: '📈', gradient: 'from-pink-500 to-rose-600' },
     { name: 'Settings', href: '/settings', icon: '⚙️', gradient: 'from-gray-500 to-slate-600' },
   ]

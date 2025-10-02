@@ -6,6 +6,8 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { useRouter } from 'next/navigation'
+import StoreRatingsTable from '@/components/StoreRatingsTable'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 interface Store {
   _id: string
@@ -490,9 +492,7 @@ export default function AdminStoresPage() {
 
           {/* Stores List */}
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
-            {loading ? (
-              <div className="p-8 text-center text-gray-600 dark:text-slate-400">Loading stores...</div>
-            ) : stores.length === 0 ? (
+            {stores.length === 0 && !loading ? (
               <div className="p-8 text-center text-gray-500 dark:text-slate-400">
                 No stores found. Create your first store!
               </div>
@@ -628,6 +628,11 @@ export default function AdminStoresPage() {
                 </table>
               </div>
             )}
+          </div>
+
+          {/* Detailed Ratings Table */}
+          <div className="mt-8">
+            <StoreRatingsTable />
           </div>
 
           {/* Create Store Modal */}
@@ -1171,6 +1176,14 @@ export default function AdminStoresPage() {
           )}
         </div>
       </Layout>
+
+      {/* Loading Overlay */}
+      <LoadingOverlay
+        isVisible={loading}
+        title="Loading Stores"
+        message="Fetching store configurations and settings..."
+        color="blue"
+      />
     </ProtectedRoute>
   )
 }

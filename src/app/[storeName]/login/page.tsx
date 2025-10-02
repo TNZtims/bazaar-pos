@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 interface Store {
   id: string
@@ -83,11 +84,13 @@ export default function CustomerLoginPage() {
 
   if (storeLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-slate-400">Loading store...</p>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900">
+        <LoadingOverlay
+          isVisible={true}
+          title="Loading Store"
+          message="Verifying store information..."
+          color="blue"
+        />
       </div>
     )
   }
@@ -177,6 +180,14 @@ export default function CustomerLoginPage() {
           </p>
         </div>
       </div>
+
+      {/* Login Loading Overlay */}
+      <LoadingOverlay
+        isVisible={loading}
+        title="Logging In"
+        message="Verifying your customer ID..."
+        color="blue"
+      />
     </div>
   )
 }

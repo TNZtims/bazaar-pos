@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Layout from '@/components/Layout'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { useToast } from '@/contexts/ToastContext'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 interface DashboardStats {
   totalProducts: number
@@ -256,6 +257,14 @@ export default function Dashboard() {
         </div>
       </div>
     </Layout>
+
+    {/* Loading Overlay */}
+    <LoadingOverlay
+      isVisible={loading}
+      title="Loading Dashboard"
+      message="Fetching store statistics and recent activity..."
+      color="blue"
+    />
     </ProtectedRoute>
   )
 }

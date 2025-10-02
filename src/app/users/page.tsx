@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import Layout from '@/components/Layout'
 import { Plus, Search, Edit, Trash2, Upload, Download, FileSpreadsheet } from 'lucide-react'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 interface User {
   _id: string
@@ -332,12 +333,7 @@ export default function UsersPage() {
 
         {/* Users Table */}
         <div className="backdrop-blur-md bg-white/90 dark:bg-slate-900/90 rounded-xl border border-slate-200/50 dark:border-slate-700/50 shadow-lg overflow-hidden">
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-              <p className="mt-2 text-slate-500 dark:text-slate-400">Loading users...</p>
-            </div>
-          ) : users.length === 0 ? (
+          {users.length === 0 && !loading ? (
             <div className="p-8 text-center">
               <p className="text-slate-500 dark:text-slate-400">No users found</p>
             </div>
@@ -917,6 +913,14 @@ function BulkImportModal({ onClose, onSuccess }: { onClose: () => void; onSucces
           </div>
         </div>
       </div>
+
+      {/* Loading Overlay */}
+      <LoadingOverlay
+        isVisible={loading}
+        title="Loading Users"
+        message="Fetching customer accounts and user data..."
+        color="purple"
+      />
     </div>
   )
 }

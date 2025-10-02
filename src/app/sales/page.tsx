@@ -7,12 +7,15 @@ import { useToast } from '@/contexts/ToastContext'
 import { useAuth } from '@/contexts/AuthContext'
 import Modal, { ConfirmationModal } from '@/components/Modal'
 import { useWebSocketInventory } from '@/hooks/useWebSocketInventory'
+import LoadingOverlay from '@/components/LoadingOverlay'
+import WebSocketStatus from '@/components/WebSocketStatus'
 
 interface Product {
   _id: string
   name: string
   cost?: number
   price: number
+  discountPrice?: number
   quantity: number
   totalQuantity: number
   availableQuantity: number
@@ -92,6 +95,8 @@ export default function SalesPage() {
     cartUpdates,
     isConnected: isWebSocketConnected,
     error: webSocketError,
+    connectionQuality,
+    reconnectAttempts,
     broadcastCartUpdate
   } = useWebSocketInventory({
     storeId: store?.id || null,
@@ -298,7 +303,7 @@ export default function SalesPage() {
           product: item.product._id,
           productName: item.product.name,
           quantity: item.quantity,
-          unitPrice: item.product.price
+          unitPrice: getEffectivePrice(item.product)
         }))
       }
       
@@ -982,6 +987,10 @@ export default function SalesPage() {
     return '/images/products/default.svg'
   }
 
+  const getEffectivePrice = (product: Product) => {
+    return product.discountPrice && product.discountPrice > 0 ? product.discountPrice : product.price
+  }
+
   const getActualAvailableQuantity = (product: Product) => {
     // Calculate based on local cart state only (removed other cashiers' reservations to fix double-counting)
     const cartItem = cart.find(item => item.product._id === product._id)
@@ -996,7 +1005,7 @@ export default function SalesPage() {
   }
 
   const calculateTotals = () => {
-    const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0)
+    const subtotal = cart.reduce((sum, item) => sum + (getEffectivePrice(item.product) * item.quantity), 0)
     const total = subtotal - saleData.discount
     return { subtotal, total }
   }
@@ -1129,17 +1138,16 @@ export default function SalesPage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Create a Sale</h1>
-              <div className="mt-1 flex items-center gap-4">
-                <p className="text-sm text-gray-600 dark:text-slate-400">Add products to cart and process sales</p>
-                {/* Real-time sync status - moved to left side under subtitle */}
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${isWebSocketConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                  <span className="text-xs text-slate-400">
-                    {isWebSocketConnected ? 'Multi-cashier sync active' : 'Multi-cashier sync offline'}
-                  </span>
-                </div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Create a Sale</h1>
+                <WebSocketStatus
+                  isConnected={isWebSocketConnected}
+                  connectionQuality={connectionQuality}
+                  error={webSocketError}
+                  reconnectAttempts={reconnectAttempts}
+                />
               </div>
+              <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Add products to cart and process sales</p>
             </div>
             {/* Empty space to ensure cart button doesn't overlap */}
             <div className="w-16 sm:w-20"></div>
@@ -1168,7 +1176,7 @@ export default function SalesPage() {
           {/* Cart Total (shown when items in cart) */}
           {cart.length > 0 && (
             <div className="absolute top-12 sm:top-14 right-0 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 px-2 py-1 rounded-lg shadow-lg text-xs sm:text-sm font-medium border border-gray-200 dark:border-slate-700 whitespace-nowrap">
-              ₱{cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0).toFixed(2)}
+              ₱{cart.reduce((sum, item) => sum + (getEffectivePrice(item.product) * item.quantity), 0).toFixed(2)}
             </div>
           )}
         </div>
@@ -1242,14 +1250,7 @@ export default function SalesPage() {
 
         {/* Products Grid */}
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
-          {loading ? (
-            <div className="p-8 text-center text-gray-600 dark:text-slate-400">
-              <div className="flex items-center justify-center gap-2">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                Loading products...
-              </div>
-            </div>
-          ) : products.length === 0 ? (
+          {products.length === 0 && !loading ? (
             <div className="p-8 text-center text-gray-500 dark:text-slate-400">
               <div className="flex flex-col items-center gap-3">
                 <svg className="h-12 w-12 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1304,6 +1305,15 @@ export default function SalesPage() {
                     className="bg-slate-700 h-48 flex items-center justify-center overflow-hidden relative cursor-pointer hover:bg-slate-600 transition-colors group"
                     onClick={() => setSelectedImageProduct(product)}
                   >
+                    {/* Sale Badge - Top Left */}
+                    {product.discountPrice && product.discountPrice > 0 && (
+                      <div className="absolute top-3 left-3 z-10">
+                        <span className="px-3 py-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-lg animate-pulse">
+                          SALE
+                        </span>
+                      </div>
+                    )}
+
                     {/* Stock Status Badge */}
                     <div className="absolute top-3 right-3 z-10 flex flex-col gap-1 items-end">
                       {/* NEW badge for newly created products */}
@@ -1366,8 +1376,26 @@ export default function SalesPage() {
 
                     {/* Price & Stock Info */}
                     <div className="flex items-center justify-between mb-4">
-                      <div className="text-2xl font-bold text-blue-400">
-                        ₱{product.price.toFixed(2)}
+                      <div className="flex flex-col">
+                        {product.discountPrice && product.discountPrice > 0 ? (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-400 font-medium">Original:</span>
+                              <div className="text-sm text-slate-400 line-through">₱{product.price.toFixed(2)}</div>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-red-300 font-medium">Sale Price:</span>
+                              <div className="text-2xl font-bold text-red-400">₱{product.discountPrice.toFixed(2)}</div>
+                            </div>
+                            <div className="text-xs text-green-300 font-medium mt-1">
+                              Save ₱{(product.price - product.discountPrice).toFixed(2)} ({(((product.price - product.discountPrice) / product.price) * 100).toFixed(0)}% off)
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-2xl font-bold text-blue-400">
+                            ₱{product.price.toFixed(2)}
+                          </div>
+                        )}
                       </div>
                       <div className="text-right">
                         <div>
@@ -1552,7 +1580,16 @@ export default function SalesPage() {
                     <div key={item.product._id} className="flex items-center space-x-4 p-4 bg-gray-50 dark:bg-slate-700 rounded-lg">
                       <div className="flex-1">
                         <h4 className="font-medium text-gray-900 dark:text-slate-100 text-lg">{item.product.name}</h4>
-                        <p className="text-gray-600 dark:text-slate-400">₱{item.product.price.toFixed(2)} each</p>
+                        <p className="text-gray-600 dark:text-slate-400">
+                          {item.product.discountPrice && item.product.discountPrice > 0 ? (
+                            <>
+                              <span className="line-through text-xs">₱{item.product.price.toFixed(2)}</span>
+                              <span className="text-red-600 dark:text-red-400 font-semibold ml-2">₱{item.product.discountPrice.toFixed(2)} each</span>
+                            </>
+                          ) : (
+                            `₱${item.product.price.toFixed(2)} each`
+                          )}
+                        </p>
                       </div>
                       <div className="flex items-center space-x-3">
                         <button
@@ -1750,7 +1787,7 @@ export default function SalesPage() {
                 <div className="border-t border-gray-200 dark:border-slate-600 pt-2 mt-2">
                   <div className="flex justify-between font-semibold">
                     <span>Total:</span>
-                    <span>₱{cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0).toFixed(2)}</span>
+                    <span>₱{cart.reduce((sum, item) => sum + (getEffectivePrice(item.product) * item.quantity), 0).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -1819,7 +1856,7 @@ export default function SalesPage() {
                 <div className="border-t border-gray-200 dark:border-slate-600 pt-2 mt-2">
                   <div className="flex justify-between font-semibold">
                     <span>Total:</span>
-                    <span>₱{cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0).toFixed(2)}</span>
+                    <span>₱{cart.reduce((sum, item) => sum + (getEffectivePrice(item.product) * item.quantity), 0).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -1909,7 +1946,15 @@ export default function SalesPage() {
               {/* Modal Content - Landscape Layout */}
               <div className="flex flex-col lg:flex-row h-full max-h-[calc(85vh-80px)]">
                 {/* Image Section - Left Side */}
-                <div className="flex-1 lg:flex-[2] p-4 sm:p-6 flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+                <div className="flex-1 lg:flex-[2] p-4 sm:p-6 flex items-center justify-center bg-gray-50 dark:bg-slate-900 relative">
+                  {/* Sale Badge - Top Left */}
+                  {selectedImageProduct.discountPrice && selectedImageProduct.discountPrice > 0 && (
+                    <div className="absolute top-6 left-6 z-10">
+                      <span className="px-4 py-2 bg-red-500 text-white text-sm font-bold rounded-full shadow-lg animate-pulse">
+                        SALE
+                      </span>
+                    </div>
+                  )}
                   <img src={selectedImageProduct.imageUrl || '/images/products/default.svg'} alt={selectedImageProduct.name} className="max-w-full max-h-full object-contain rounded-lg shadow-lg" style={{ maxHeight: '500px' }} onError={(e) => { (e.target as HTMLImageElement).src = '/images/products/default.svg' }} />
                 </div>
                 
@@ -1918,9 +1963,30 @@ export default function SalesPage() {
                   <div className="space-y-6">
                     {/* Price Badge */}
                     <div className="flex items-center gap-3">
-                      <span className="inline-flex items-center px-4 py-2 rounded-full text-lg font-bold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                        ₱{selectedImageProduct.price.toFixed(2)}
-                      </span>
+                      {selectedImageProduct.discountPrice && selectedImageProduct.discountPrice > 0 ? (
+                        <div className="flex flex-col items-start">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Original Price:</span>
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 line-through">
+                              ₱{selectedImageProduct.price.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs text-red-600 dark:text-red-400 font-medium">Sale Price:</span>
+                            <span className="inline-flex items-center px-4 py-2 rounded-full text-lg font-bold bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                              ₱{selectedImageProduct.discountPrice.toFixed(2)}
+                            </span>
+                          </div>
+                          <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                            Save ₱{(selectedImageProduct.price - selectedImageProduct.discountPrice).toFixed(2)}
+                            ({(((selectedImageProduct.price - selectedImageProduct.discountPrice) / selectedImageProduct.price) * 100).toFixed(0)}% off)
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center px-4 py-2 rounded-full text-lg font-bold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                          ₱{selectedImageProduct.price.toFixed(2)}
+                        </span>
+                      )}
                       {selectedImageProduct.category && (
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                           {selectedImageProduct.category}
@@ -1972,7 +2038,15 @@ export default function SalesPage() {
           </div>
         )}
       </div>
-    </Layout>
+      </Layout>
+
+      {/* Loading Overlay */}
+      <LoadingOverlay
+        isVisible={loading}
+        title="Loading Products"
+        message="Fetching available products for sale..."
+        color="green"
+      />
     </ProtectedRoute>
   )
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Layout from '@/components/Layout'
+import SalesSourceChart from '@/components/SalesSourceChart'
 
 interface DailyReport {
   date: string
@@ -25,6 +26,7 @@ interface ProductSalesData {
   price: number
   cost?: number
   category?: string
+  seller?: string
   totalQuantitySold: number
   totalRevenue: number
   salesCount: number
@@ -33,69 +35,106 @@ interface ProductSalesData {
   lastSaleDate?: string
 }
 
-interface Sale {
-  _id: string
-  finalAmount: number
-  paymentMethod: string
-  customerName?: string
-  createdAt: string
-  items: Array<{
-    productName: string
-    quantity: number
-    unitPrice: number
-    totalPrice: number
-  }>
+interface Seller {
+  name: string
+  productCount: number
+  lastUpdated: string
 }
+
+interface ProductOption {
+  _id: string
+  name: string
+  category?: string
+}
+
 
 export default function ReportsPage() {
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null)
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
   const [allProducts, setAllProducts] = useState<ProductSalesData[]>([])
-  const [recentSales, setRecentSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
-  const [productsLoading, setProductsLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0])
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0])
   const [sortBy, setSortBy] = useState<'totalQuantitySold' | 'totalRevenue' | 'profit' | 'productName'>('totalQuantitySold')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [filterCategory, setFilterCategory] = useState<string>('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(20)
+  const [filterSeller, setFilterSeller] = useState<string[]>([])
+  const [pendingSeller, setPendingSeller] = useState<string[]>([]) // Temporary state for dropdown selections
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('all')
+  const [filterProduct, setFilterProduct] = useState<string>('all')
+  const [sellers, setSellers] = useState<Seller[]>([])
+  const [productOptions, setProductOptions] = useState<ProductOption[]>([])
+  const [sellersLoading, setSellersLoading] = useState(false)
+  const [productOptionsLoading, setProductOptionsLoading] = useState(false)
+  const [productsLoading, setProductsLoading] = useState(true)
+  const [sellerDropdownOpen, setSellerDropdownOpen] = useState(false)
 
   useEffect(() => {
     fetchReports()
-  }, [selectedDate, dateFrom, dateTo])
+  }, [dateFrom, dateTo, filterSeller.join(','), filterPaymentStatus, filterProduct])
+
+  useEffect(() => {
+    fetchSellers()
+    fetchProductOptions()
+  }, [])
+
+  // Initialize pending seller state when dropdown opens
+  useEffect(() => {
+    if (sellerDropdownOpen) {
+      setPendingSeller([...filterSeller])
+    }
+  }, [sellerDropdownOpen, filterSeller])
+
+  // Close dropdown when clicking outside and apply pending changes
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (sellerDropdownOpen && !target.closest('.seller-dropdown')) {
+        handleSellerDropdownClose()
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [sellerDropdownOpen, pendingSeller])
 
   const fetchReports = async () => {
     setLoading(true)
     setProductsLoading(true)
     try {
-      // Fetch daily report
-      const dailyRes = await fetch(`/api/reports/daily?date=${selectedDate}`)
-      const dailyData = await dailyRes.json()
-      setDailyReport(dailyData)
-
-      // Fetch top products (last 30 days) - keep for backward compatibility
-      const thirtyDaysAgo = new Date()
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-      
-      const topProductsRes = await fetch(`/api/reports/top-products?limit=10&startDate=${thirtyDaysAgo.toISOString()}`)
-      const topProductsData = await topProductsRes.json()
-      setTopProducts(topProductsData)
-
-      // Fetch all products with sales data for selected date range
+      // Calculate date range for reports
       const startOfDay = new Date(dateFrom)
       startOfDay.setHours(0, 0, 0, 0)
       const endOfDay = new Date(dateTo)
       endOfDay.setHours(23, 59, 59, 999)
+
+      // Fetch daily report for the selected date range
+      const dailyRes = await fetch(`/api/reports/daily?startDate=${startOfDay.toISOString()}&endDate=${endOfDay.toISOString()}`)
+      const dailyData = await dailyRes.json()
+      setDailyReport(dailyData)
+
+      // Fetch top products for the selected date range
+      const topProductsRes = await fetch(`/api/reports/top-products?limit=10&startDate=${startOfDay.toISOString()}&endDate=${endOfDay.toISOString()}`)
+      const topProductsData = await topProductsRes.json()
+      setTopProducts(topProductsData)
+
+      // Build query parameters for all products
+      const params = new URLSearchParams({
+        startDate: startOfDay.toISOString(),
+        endDate: endOfDay.toISOString()
+      })
       
-      const allProductsRes = await fetch(`/api/reports/all-products?startDate=${startOfDay.toISOString()}&endDate=${endOfDay.toISOString()}`)
+      if (filterSeller.length > 0) params.append('sellers', filterSeller.join(','))
+      if (filterPaymentStatus !== 'all') params.append('paymentStatus', filterPaymentStatus)
+      if (filterProduct !== 'all') params.append('productId', filterProduct)
+
+      // Fetch all products with sales data for selected date range and filters
+      const allProductsRes = await fetch(`/api/reports/all-products?${params.toString()}`)
       const allProductsData = await allProductsRes.json()
       setAllProducts(allProductsData)
-
-      // Fetch recent sales
-      const salesRes = await fetch('/api/sales?limit=10')
-      const salesData = await salesRes.json()
-      setRecentSales(salesData.sales || [])
 
     } catch (error) {
       console.error('Error fetching reports:', error)
@@ -105,8 +144,30 @@ export default function ReportsPage() {
     }
   }
 
-  const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString()
+  const fetchSellers = async () => {
+    setSellersLoading(true)
+    try {
+      const response = await fetch('/api/reports/sellers')
+      const sellersData = await response.json()
+      setSellers(sellersData)
+    } catch (error) {
+      console.error('Error fetching sellers:', error)
+    } finally {
+      setSellersLoading(false)
+    }
+  }
+
+  const fetchProductOptions = async () => {
+    setProductOptionsLoading(true)
+    try {
+      const response = await fetch('/api/reports/products-list')
+      const productsData = await response.json()
+      setProductOptions(productsData)
+    } catch (error) {
+      console.error('Error fetching product options:', error)
+    } finally {
+      setProductOptionsLoading(false)
+    }
   }
 
   const formatCurrency = (amount: number | undefined | null) => {
@@ -128,9 +189,53 @@ export default function ReportsPage() {
   // Get unique categories for filter
   const categories = ['all', ...new Set(allProducts.map(p => p.category).filter(Boolean))]
 
+  // Debug: Log current filter state
+  console.log('🔍 Table Filters:', {
+    dateFrom,
+    dateTo,
+    filterSeller,
+    filterPaymentStatus,
+    filterProduct,
+    filterCategory,
+    searchTerm,
+    totalProductsFromAPI: allProducts.length
+  })
+
   // Sort and filter products
+  // Note: allProducts is already filtered by API for sellers, paymentStatus, and productId
+  // We apply additional client-side filters here (category and search)
   const sortedAndFilteredProducts = allProducts
-    .filter(product => filterCategory === 'all' || product.category === filterCategory)
+    .filter(product => {
+      // Category filter (client-side only)
+      const categoryMatch = filterCategory === 'all' || product.category === filterCategory
+      
+      // Search filter (client-side only)
+      const searchMatch = searchTerm === '' || 
+        product.productName.toLowerCase().includes(searchTerm.toLowerCase())
+      
+      // Seller filter verification (should already be handled by API, but double-checking)
+      const sellerMatch = filterSeller.length === 0 || 
+        (product.seller && filterSeller.includes(product.seller))
+      
+      // Product filter verification (should already be handled by API, but double-checking)
+      const productMatch = filterProduct === 'all' || product._id === filterProduct
+      
+      return categoryMatch && searchMatch && sellerMatch && productMatch
+    })
+
+  // Debug: Log filtering results
+  console.log('🔍 Table Filtering Results:', {
+    beforeFiltering: allProducts.length,
+    afterFiltering: sortedAndFilteredProducts.length,
+    filtersApplied: {
+      category: filterCategory !== 'all',
+      search: searchTerm !== '',
+      seller: filterSeller.length > 0,
+      product: filterProduct !== 'all'
+    }
+  })
+
+  const finalSortedProducts = sortedAndFilteredProducts
     .sort((a, b) => {
       let aValue: any, bValue: any
       
@@ -163,12 +268,108 @@ export default function ReportsPage() {
       }
     })
 
+  // Pagination logic
+  const totalProducts = finalSortedProducts.length
+  const totalPages = Math.ceil(totalProducts / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = Math.min(startIndex + itemsPerPage, totalProducts)
+  const paginatedProducts = finalSortedProducts.slice(startIndex, endIndex)
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, filterCategory, filterSeller.length, filterPaymentStatus, filterProduct, sortBy, sortOrder])
+
   const handleSort = (column: typeof sortBy) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
     } else {
       setSortBy(column)
       setSortOrder('desc')
+    }
+  }
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage)
+    setCurrentPage(1) // Reset to first page when changing items per page
+  }
+
+  // Export functions
+  const exportToCSV = (data: ProductSalesData[], filename: string) => {
+    const headers = [
+      'Product Name',
+      'Category',
+      'Seller',
+      'Current Stock',
+      'Price',
+      'Units Sold',
+      'Sales Count',
+      'Revenue',
+      'Profit',
+      'Profit Margin (%)',
+      'Last Sale Date'
+    ]
+
+    const csvContent = [
+      headers.join(','),
+      ...data.map(product => [
+        `"${product.productName}"`,
+        `"${product.category || 'Uncategorized'}"`,
+        `"${product.seller || 'N/A'}"`,
+        product.currentStock,
+        product.price.toFixed(2),
+        product.totalQuantitySold,
+        product.salesCount,
+        product.totalRevenue.toFixed(2),
+        product.profit.toFixed(2),
+        product.profitMargin.toFixed(1),
+        product.lastSaleDate ? new Date(product.lastSaleDate).toLocaleDateString() : 'Never'
+      ].join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', filename)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handleExportFiltered = () => {
+    const filename = `products-report-${dateFrom}-to-${dateTo}-filtered.csv`
+    exportToCSV(finalSortedProducts, filename)
+  }
+
+  const handleExportAll = async () => {
+    try {
+      // Fetch all products regardless of date range or filters
+      // Make a clean API call without any parameters to bypass all filters
+      const response = await fetch('/api/reports/all-products', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Explicitly don't pass any query parameters
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const allProductsData = await response.json()
+      console.log(`📊 Export All: Fetched ${allProductsData.length} products (should be ALL products regardless of date filters)`)
+      
+      const filename = `all-products-complete-report.csv`
+      exportToCSV(allProductsData, filename)
+    } catch (error) {
+      console.error('Error exporting all products:', error)
     }
   }
 
@@ -195,23 +396,18 @@ export default function ReportsPage() {
     }
   }
 
-  // Quick date range presets
-  const setDateRangePreset = (days: number) => {
-    const today = new Date()
-    const startDate = new Date()
-    startDate.setDate(today.getDate() - days + 1) // Include today
-    
-    setDateFrom(startDate.toISOString().split('T')[0])
-    setDateTo(today.toISOString().split('T')[0])
+  // Handle seller dropdown close and apply changes
+  const handleSellerDropdownClose = () => {
+    setFilterSeller([...pendingSeller])
+    setSellerDropdownOpen(false)
   }
 
-  const setThisMonth = () => {
-    const today = new Date()
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
-    
-    setDateFrom(firstDay.toISOString().split('T')[0])
-    setDateTo(today.toISOString().split('T')[0])
+  // Handle seller dropdown open
+  const handleSellerDropdownOpen = () => {
+    setPendingSeller([...filterSeller])
+    setSellerDropdownOpen(true)
   }
+
 
   return (
     <Layout>
@@ -222,177 +418,388 @@ export default function ReportsPage() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Reports & Analytics</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Sales performance and insights</p>
           </div>
-          
-          {/* Date Range Selector */}
-          <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                Date From
-              </label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => handleDateFromChange(e.target.value)}
-                className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                Date To
-              </label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => handleDateToChange(e.target.value)}
-                className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              />
-            </div>
-            <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                Daily Report Date
-            </label>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            />
-            </div>
-            
-            {/* Quick Date Range Presets */}
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                onClick={() => setDateRangePreset(1)}
-                className="px-3 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-              >
-                Today
-              </button>
-              <button
-                onClick={() => setDateRangePreset(7)}
-                className="px-3 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-              >
-                Last 7 Days
-              </button>
-              <button
-                onClick={() => setDateRangePreset(30)}
-                className="px-3 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-              >
-                Last 30 Days
-              </button>
-              <button
-                onClick={setThisMonth}
-                className="px-3 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-              >
-                This Month
-              </button>
-            </div>
-          </div>
         </div>
 
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="text-gray-600 dark:text-slate-400">Loading reports...</div>
-          </div>
-        ) : (
-          <>
-            {/* Daily Report Cards */}
-            {dailyReport && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <span className="text-2xl">💰</span>
-                    </div>
-                    <div className="ml-4">
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Total Sales</h3>
-                      <p className="text-2xl font-semibold text-gray-900 dark:text-slate-100">{dailyReport.totalSales}</p>
-                    </div>
-                  </div>
+        {/* Floating Loader Overlay */}
+        {loading && (
+          <div className="fixed inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 mx-4 max-w-sm w-full border border-gray-200 dark:border-slate-700">
+              {/* Modern Loading Spinner */}
+              <div className="flex flex-col items-center">
+                <div className="relative">
+                  <div className="w-16 h-16 border-4 border-gray-200 dark:border-slate-700 rounded-full animate-spin border-t-blue-600 dark:border-t-blue-400"></div>
+                  <div className="absolute inset-0 w-16 h-16 border-4 border-transparent rounded-full animate-ping border-t-blue-600/20 dark:border-t-blue-400/20"></div>
                 </div>
-
-                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <span className="text-2xl">📈</span>
-                    </div>
-                    <div className="ml-4">
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Total Revenue</h3>
-                      <p className="text-2xl font-semibold text-gray-900 dark:text-slate-100">{formatCurrency(dailyReport.totalRevenue)}</p>
-                    </div>
-                  </div>
+                
+                {/* Loading Text */}
+                <div className="mt-6 text-center">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2">
+                    Updating Reports
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-slate-400">
+                    Applying filters and refreshing data...
+                  </p>
                 </div>
-
-                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <span className="text-2xl">🛒</span>
-                    </div>
-                    <div className="ml-4">
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Avg Order Value</h3>
-                      <p className="text-2xl font-semibold text-gray-900 dark:text-slate-100">{formatCurrency(dailyReport.averageOrderValue)}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <span className="text-2xl">📅</span>
-                    </div>
-                    <div className="ml-4">
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Report Date</h3>
-                      <p className="text-lg font-semibold text-gray-900 dark:text-slate-100">{selectedDate}</p>
-                    </div>
-                  </div>
+                
+                {/* Loading Progress Dots */}
+                <div className="flex space-x-1 mt-4">
+                  <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                  <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
                 </div>
               </div>
-            )}
+            </div>
+          </div>
+        )}
 
-            {/* Enhanced Top Products Table - Full Width */}
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
-              <div className="p-6 border-b border-gray-200 dark:border-slate-700">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">All Products Performance</h2>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
-                      Complete overview of all products with completed paid sales for {formatDateRange()}
-                    </p>
+        {/* Sales Source Breakdown Chart */}
+        <SalesSourceChart 
+          startDate={dateFrom} 
+          endDate={dateTo}
+          sellers={filterSeller}
+          paymentStatus={filterPaymentStatus}
+          productId={filterProduct}
+        />
+
+        {/* Product Performance Controls */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Product Performance Controls</h3>
+                <p className="text-sm text-gray-600 dark:text-slate-400">Filter and analyze product sales data</p>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                {/* Date Range Filters */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    Date From
+                  </label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => handleDateFromChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    Date To
+                  </label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => handleDateToChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  />
+                </div>
+
+                {/* Product Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    Product
+                  </label>
+                  <select
+                    value={filterProduct}
+                    onChange={(e) => setFilterProduct(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={productOptionsLoading}
+                  >
+                    <option value="all">All Products</option>
+                    {productOptions.map(product => (
+                      <option key={product._id} value={product._id}>
+                        {product.name} {product.category && `(${product.category})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Category Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {categories.map(category => (
+                      <option key={category} value={category}>
+                        {category === 'all' ? 'All Categories' : category || 'Uncategorized'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Seller Filter - Modern Dropdown with Checkboxes */}
+                <div className="relative seller-dropdown">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    Sellers ({filterSeller.length} selected)
+                  </label>
+                  
+                  {/* Dropdown Button */}
+                  <button
+                    onClick={() => sellerDropdownOpen ? handleSellerDropdownClose() : handleSellerDropdownOpen()}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between"
+                    disabled={sellersLoading}
+                  >
+                    <span className="truncate">
+                      {filterSeller.length === 0 
+                        ? 'Select sellers...' 
+                        : filterSeller.length === 1 
+                        ? filterSeller[0]
+                        : `${filterSeller.length} sellers selected`
+                      }
+                      {sellerDropdownOpen && pendingSeller.length !== filterSeller.length && (
+                        <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
+                          ({pendingSeller.length} pending)
+                        </span>
+                      )}
+                    </span>
+                    <svg 
+                      className={`w-4 h-4 transition-transform ${sellerDropdownOpen ? 'rotate-180' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {sellerDropdownOpen && (
+                    <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {/* Header with Select All / Clear All */}
+                      <div className="px-3 py-2 border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-600">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-medium text-gray-700 dark:text-slate-300">
+                            {sellers.length} sellers available
+                          </span>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setPendingSeller(sellers.map(s => s.name))}
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 font-medium"
+                              disabled={sellersLoading || sellers.length === 0}
+                            >
+                              Select All
+                            </button>
+                            <button
+                              onClick={() => setPendingSeller([])}
+                              className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium"
+                              disabled={pendingSeller.length === 0}
+                            >
+                              Clear All
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Seller Options */}
+                      <div className="py-1">
+                        {sellers.map(seller => (
+                          <label
+                            key={seller.name}
+                            className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={pendingSeller.includes(seller.name)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setPendingSeller(prev => [...prev, seller.name])
+                                } else {
+                                  setPendingSeller(prev => prev.filter(s => s !== seller.name))
+                                }
+                              }}
+                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                            />
+                            <div className="ml-3 flex-1">
+                              <span className="text-sm text-gray-900 dark:text-slate-100 font-medium">
+                                {seller.name}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-slate-400 ml-1">
+                                ({seller.productCount} products)
+                              </span>
+                            </div>
+                          </label>
+                        ))}
+                        
+                        {sellers.length === 0 && !sellersLoading && (
+                          <div className="px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">
+                            No sellers found
+                          </div>
+                        )}
+                        
+                        {sellersLoading && (
+                          <div className="px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">
+                            Loading sellers...
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Action Buttons */}
+                      <div className="px-3 py-2 border-t border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-600 flex justify-between">
+                        <button
+                          onClick={() => {
+                            setPendingSeller([...filterSeller])
+                            setSellerDropdownOpen(false)
+                          }}
+                          className="px-3 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 border border-gray-300 dark:border-slate-500 rounded"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleSellerDropdownClose}
+                          className="px-3 py-1 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded"
+                          disabled={JSON.stringify(pendingSeller.sort()) === JSON.stringify(filterSeller.sort())}
+                        >
+                          Apply ({pendingSeller.length})
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Selected Sellers Display */}
+                  {filterSeller.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {filterSeller.map(seller => (
+                        <span
+                          key={seller}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400"
+                        >
+                          {seller}
+                          <button
+                            onClick={() => setFilterSeller(prev => prev.filter(s => s !== seller))}
+                            className="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Payment Status Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    Payment Status
+                  </label>
+                  <select
+                    value={filterPaymentStatus}
+                    onChange={(e) => setFilterPaymentStatus(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="paid">Paid</option>
+                    <option value="partial">Partial</option>
+                    <option value="pending">Pending</option>
+                    <option value="overdue">Overdue</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+        {/* Enhanced Top Products Table - Full Width */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 relative">
+          {/* Table Loading Overlay */}
+          {productsLoading && (
+            <div className="absolute inset-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-slate-700">
+                <div className="flex flex-col items-center">
+                  <div className="relative">
+                    <div className="w-12 h-12 border-4 border-gray-200 dark:border-slate-700 rounded-full animate-spin border-t-blue-600 dark:border-t-blue-400"></div>
+                    <div className="absolute inset-0 w-12 h-12 border-4 border-transparent rounded-full animate-pulse border-t-blue-600/30 dark:border-t-blue-400/30"></div>
                   </div>
                   
-                  {/* Filters and Controls */}
-                  <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-3">
-                    <select
-                      value={filterCategory}
-                      onChange={(e) => setFilterCategory(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      {categories.map(category => (
-                        <option key={category} value={category}>
-                          {category === 'all' ? 'All Categories' : category || 'Uncategorized'}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="mt-4 text-center">
+                    <p className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                      Updating Products
+                    </p>
+                    <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
+                      Applying filters...
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">All Products Performance</h2>
+                <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
+                  Complete overview of all products with completed paid sales for {formatDateRange()}
+                </p>
+              </div>
+              
+              {/* Search and Export Controls */}
+              <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-3">
+                    {/* Search Input */}
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="h-5 w-5 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search products..."
+                        className="pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
+                      />
+                      {searchTerm && (
+                        <button
+                          onClick={() => setSearchTerm('')}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        >
+                          <svg className="h-4 w-4 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Export Buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleExportFiltered}
+                        disabled={finalSortedProducts.length === 0}
+                        className="px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Export Filtered ({finalSortedProducts.length})
+                      </button>
+                      <button
+                        onClick={handleExportAll}
+                        className="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Export All Products
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                {productsLoading ? (
-                  <div className="text-center py-12">
-                    <div className="inline-flex items-center gap-2 text-gray-600 dark:text-slate-400">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                      Loading products data...
-                    </div>
-                  </div>
-                ) : sortedAndFilteredProducts.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="text-gray-500 dark:text-slate-400">
-                      <div className="text-4xl mb-4">📦</div>
-                      <p className="text-lg font-medium">No products found</p>
-                      <p className="text-sm">Try adjusting your filters or add some products to your inventory</p>
-                    </div>
-                  </div>
-                ) : (
+          <div className="overflow-x-auto">
+            {totalProducts === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-gray-500 dark:text-slate-400">
+                  <div className="text-4xl mb-4">📦</div>
+                  <p className="text-lg font-medium">No products found</p>
+                  <p className="text-sm">Try adjusting your filters or add some products to your inventory</p>
+                </div>
+              </div>
+            ) : (
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
                     <thead className="bg-gray-50 dark:bg-slate-700">
                       <tr>
@@ -411,6 +818,9 @@ export default function ReportsPage() {
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                           Category
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                          Seller
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                           Current Stock
@@ -469,7 +879,7 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
-                      {sortedAndFilteredProducts.map((product, index) => (
+                      {paginatedProducts.map((product, index) => (
                         <tr 
                           key={product._id} 
                           className={`hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${
@@ -483,7 +893,7 @@ export default function ReportsPage() {
                                   ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400'
                                   : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
                               }`}>
-                            {index + 1}
+                            {startIndex + index + 1}
                           </div>
                           <div>
                                 <div className="text-sm font-medium text-gray-900 dark:text-slate-100">
@@ -497,6 +907,15 @@ export default function ReportsPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
                             {product.category || 'Uncategorized'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
+                            {product.seller && product.seller !== 'N/A' ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400">
+                                {product.seller}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 dark:text-slate-500">No seller</span>
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -538,61 +957,104 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
-                )}
-              </div>
-              </div>
+            )}
+          </div>
 
-            {/* Recent Sales - Now Below Products Table */}
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Recent Sales</h2>
-                
-                {recentSales.length === 0 ? (
-                  <p className="text-gray-500 dark:text-slate-400 text-center py-8">No recent sales</p>
-                ) : (
-                  <div className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600 scrollbar-track-gray-100 dark:scrollbar-track-slate-700 pr-2">
-                    <div className="space-y-3">
-                      {recentSales.map((sale) => (
-                        <div key={sale._id} className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-white dark:bg-slate-700">
-                          <div className="flex items-center justify-between mb-2">
-                            <div>
-                              <p className="font-medium text-gray-900 dark:text-slate-100">{formatCurrency(sale.finalAmount)}</p>
-                            <p className="text-sm text-gray-600 dark:text-slate-400">{formatDateTime(sale.createdAt)}</p>
-                            </div>
-                            <div className="text-right">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                sale.paymentMethod === 'cash' 
-                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
-                                  : sale.paymentMethod === 'card'
-                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400'
-                                  : 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400'
-                              }`}>
-                                {sale.paymentMethod}
-                              </span>
-                            </div>
-                          </div>
-                          
-                          {sale.customerName && (
-                            <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">Customer: {sale.customerName}</p>
-                          )}
-                          
-                          <div className="text-sm text-gray-600 dark:text-slate-400">
-                            <p className="font-medium">Items:</p>
-                            <ul className="list-disc list-inside ml-2 space-y-1">
-                              {sale.items.map((item, index) => (
-                                <li key={index}>
-                                  {item.quantity}x {item.productName} - {formatCurrency(item.totalPrice)}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      ))}
+          {/* Pagination Controls */}
+          {totalProducts > 0 && (
+                <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700">
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div className="text-sm text-gray-700 dark:text-slate-300">
+                      Showing <span className="font-medium">{startIndex + 1}</span> to <span className="font-medium">{endIndex}</span> of{' '}
+                      <span className="font-medium">{totalProducts}</span> products
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {/* Items per page selector */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-700 dark:text-slate-300">Show:</span>
+                        <select
+                          value={itemsPerPage}
+                          onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                          className="px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                        >
+                          <option value={10}>10</option>
+                          <option value={20}>20</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                        </select>
+                      </div>
+
+                      {/* Previous Button */}
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Previous
+                      </button>
+
+                      {/* Page Numbers */}
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => handlePageChange(pageNum)}
+                              className={`relative inline-flex items-center px-3 py-2 text-sm font-medium border rounded-md transition-colors ${
+                                currentPage === pageNum
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                        
+                        {totalPages > 5 && currentPage < totalPages - 2 && (
+                          <>
+                            <span className="text-gray-500 dark:text-slate-400 px-2">...</span>
+                            <button
+                              onClick={() => handlePageChange(totalPages)}
+                              className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
+                            >
+                              {totalPages}
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Next Button */}
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Next
+                        <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
-                )}
-            </div>
-          </>
-        )}
+                </div>
+              )}
+        </div>
       </div>
     </Layout>
   )

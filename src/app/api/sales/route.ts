@@ -4,6 +4,8 @@ import Sale from '@/models/Sale'
 import Product from '@/models/Product'
 import Cart from '@/models/Cart'
 import { authenticateRequest } from '@/lib/auth'
+import { createAuditLog } from '@/lib/audit-logger'
+import mongoose from 'mongoose'
 
 // GET /api/sales - Get all sales with pagination and filters
 export async function GET(request: NextRequest) {
@@ -22,12 +24,15 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
+    const isExport = searchParams.get('export') === 'true'
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
     const date = searchParams.get('date') // Single date filter
     const paymentMethod = searchParams.get('paymentMethod')
     const paymentStatus = searchParams.get('paymentStatus')
-    const search = searchParams.get('search') // Customer name search
+    const search = searchParams.get('search') // General search (order ID, product name, etc.)
+    const customerName = searchParams.get('customerName') // Dedicated customer name filter
+    const productId = searchParams.get('productId') // Product filter
     const sort = searchParams.get('sort') || '-createdAt' // Sort order
     
     const query: any = {
@@ -69,7 +74,29 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Customer name, Order ID, or Product name search
+    // Dedicated customer name filter
+    if (customerName) {
+      console.log('🔍 Sales API: Customer name filter:', customerName)
+      query.customerName = { $regex: customerName, $options: 'i' }
+    }
+    
+    // Product filter
+    if (productId) {
+      console.log('🔍 Sales API: Product filter:', productId)
+      try {
+        // Convert string to ObjectId for proper matching
+        query['items.product'] = new mongoose.Types.ObjectId(productId)
+        console.log('🔍 Sales API: ObjectId conversion successful')
+      } catch (error) {
+        console.error('❌ Sales API: Invalid ObjectId format:', productId, error)
+        return NextResponse.json(
+          { message: 'Invalid product ID format' },
+          { status: 400 }
+        )
+      }
+    }
+    
+    // General search (Order ID, Product name, etc.)
     if (search) {
       console.log('🔍 Sales API: Search term:', search)
       // Try to search by Order ID first (if it looks like a MongoDB ObjectId)
@@ -77,12 +104,8 @@ export async function GET(request: NextRequest) {
         query._id = search
         console.log('🔍 Sales API: Searching by ObjectId:', search)
       } else {
-        // Search by customer info, product names, cashier, status, and order details
-        // Note: Removed _id regex search as ObjectIds don't support $options
+        // Search by product names, cashier, status, and order details (excluding customer info since we have dedicated filter)
         query.$or = [
-          { customerName: { $regex: search, $options: 'i' } },
-          { customerPhone: { $regex: search, $options: 'i' } },
-          { customerEmail: { $regex: search, $options: 'i' } },
           { 'items.productName': { $regex: search, $options: 'i' } }, // Product name search
           { cashier: { $regex: search, $options: 'i' } }, // Cashier who processed
           { approvedBy: { $regex: search, $options: 'i' } }, // Cashier who approved
@@ -95,30 +118,120 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Sort options
-    let sortOption: any = { createdAt: -1 } // Default newest first
+    // Sort options with priority for pending/partial orders
+    let sortOption: any = { 
+      // First sort by payment status priority (pending and partial first)
+      paymentStatusPriority: -1,
+      // Then by creation date
+      createdAt: -1 
+    }
+    
     if (sort === 'createdAt') {
-      sortOption = { createdAt: 1 } // Oldest first
+      sortOption = { 
+        paymentStatusPriority: -1,
+        createdAt: 1 // Oldest first
+      }
     } else if (sort === '-createdAt') {
-      sortOption = { createdAt: -1 } // Newest first
+      sortOption = { 
+        paymentStatusPriority: -1,
+        createdAt: -1 // Newest first
+      }
+    } else if (sort === 'finalAmount') {
+      sortOption = { 
+        paymentStatusPriority: -1,
+        finalAmount: 1 
+      }
+    } else if (sort === '-finalAmount') {
+      sortOption = { 
+        paymentStatusPriority: -1,
+        finalAmount: -1 
+      }
+    } else if (sort === 'customerName') {
+      sortOption = { 
+        paymentStatusPriority: -1,
+        customerName: 1 
+      }
+    } else if (sort === '-customerName') {
+      sortOption = { 
+        paymentStatusPriority: -1,
+        customerName: -1 
+      }
     }
     
     console.log('🔍 Sales API: Final query:', JSON.stringify(query, null, 2))
+    console.log('🔍 Sales API: Product filter applied:', !!productId, 'ProductId:', productId)
     
-    const sales = await Sale.find(query)
-      .limit(limit)
-      .skip((page - 1) * limit)
-      .sort(sortOption)
+    // Debug: Check if we have any sales with items at all
+    if (productId) {
+      const totalSalesWithItems = await Sale.countDocuments({
+        storeId: authContext.store._id,
+        'items.0': { $exists: true } // Check if items array has at least one element
+      })
+      console.log('🔍 Sales API: Total sales with items in store:', totalSalesWithItems)
+      
+      // Check if any sales have this specific product
+      const salesWithThisProduct = await Sale.countDocuments({
+        storeId: authContext.store._id,
+        'items.product': new mongoose.Types.ObjectId(productId)
+      })
+      console.log('🔍 Sales API: Sales with this specific product:', salesWithThisProduct)
+    }
+    
+    // Use aggregation pipeline to add priority sorting for payment status
+    const aggregationPipeline = [
+      { $match: query },
+      {
+        $addFields: {
+          paymentStatusPriority: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$paymentStatus', 'pending'] }, then: 3 },
+                { case: { $eq: ['$paymentStatus', 'partial'] }, then: 2 },
+                { case: { $eq: ['$paymentStatus', 'overdue'] }, then: 1 },
+                { case: { $eq: ['$paymentStatus', 'paid'] }, then: 0 }
+              ],
+              default: 0
+            }
+          }
+        }
+      },
+      { $sort: sortOption }
+    ]
+
+    // Only add pagination for non-export requests
+    if (!isExport) {
+      aggregationPipeline.push(
+        { $skip: (page - 1) * limit },
+        { $limit: limit }
+      )
+    }
+
+    const sales = await Sale.aggregate(aggregationPipeline)
     
     const total = await Sale.countDocuments(query)
     
-    console.log(`🔍 Sales API: Found ${sales.length} sales, total: ${total}`)
+    // Calculate total amount for all filtered orders (not just current page)
+    const totalAmountResult = await Sale.aggregate([
+      { $match: query },
+      { $group: { _id: null, totalAmount: { $sum: '$finalAmount' } } }
+    ])
+    
+    const totalAmount = totalAmountResult.length > 0 ? totalAmountResult[0].totalAmount : 0
+    
+    console.log(`🔍 Sales API: Found ${sales.length} sales, total: ${total}, total amount: ₱${totalAmount.toFixed(2)}`)
+    if (productId) {
+      console.log(`🔍 Sales API: Product filter results - Found ${sales.length} orders containing product ${productId}`)
+    }
+    if (isExport) {
+      console.log(`📊 Sales API: Export request - returning ${sales.length} orders without pagination`)
+    }
     
     return NextResponse.json({
       sales,
       totalPages: Math.ceil(total / limit),
       currentPage: page,
-      total
+      total,
+      totalAmount
     })
   } catch (error: unknown) {
     console.error('❌ Sales API Error:', error)
@@ -314,6 +427,12 @@ export async function POST(request: NextRequest) {
             // For admin sales, items might have been reserved through cart or might be direct sales
             // We need to handle both cases atomically
             
+            // Get current product for audit logging
+            const currentProduct = await Product.findById(item.productId)
+            if (!currentProduct) {
+              throw new Error(`Product ${item.productId} not found`)
+            }
+            
             // Reduce stock (simplified schema)
             const updateResult = await Product.findOneAndUpdate(
               { 
@@ -335,6 +454,30 @@ export async function POST(request: NextRequest) {
             if (updateResult.quantity < 0) {
               throw new Error(`Product ${updateResult.name} would have negative stock after sale`)
             }
+            
+            // Create audit log for this stock movement
+            await createAuditLog({
+              productId: item.productId,
+              productName: currentProduct.name,
+              storeId: authContext.store._id.toString(),
+              storeName: authContext.store.storeName,
+              action: 'sale',
+              quantityChange: -item.quantity,
+              previousQuantity: currentProduct.quantity,
+              newQuantity: updateResult.quantity,
+              reason: 'Sale transaction',
+              orderId: savedSale._id.toString(),
+              customerName: savedSale.customerName || 'Walk-in Customer',
+              cashier: cashier,
+              userId: (authContext as any).user?._id?.toString(),
+              metadata: {
+                orderType: 'sale',
+                paymentStatus: savedSale.paymentStatus,
+                customerPhone: savedSale.customerPhone,
+                customerEmail: savedSale.customerEmail,
+                notes: savedSale.notes
+              }
+            })
           }
         })
         
@@ -435,6 +578,33 @@ export async function POST(request: NextRequest) {
         if (updateResult && updateResult.quantity < 0) {
           console.warn(`⚠️ Warning: Product ${updateResult.name} has negative stock: ${updateResult.quantity}`)
           // Note: In production, you might want to implement stock reservation or rollback
+        }
+        
+        // Create audit log for this stock movement
+        const currentProduct = await Product.findById(item.productId)
+        if (currentProduct && updateResult) {
+          await createAuditLog({
+            productId: item.productId,
+            productName: currentProduct.name,
+            storeId: authContext.store._id.toString(),
+            storeName: authContext.store.storeName,
+            action: 'sale',
+            quantityChange: -item.quantity,
+            previousQuantity: currentProduct.quantity,
+            newQuantity: updateResult.quantity,
+            reason: 'Sale transaction',
+            orderId: savedSale._id.toString(),
+            customerName: savedSale.customerName || 'Walk-in Customer',
+            cashier: cashier,
+            userId: (authContext as any).user?._id?.toString(),
+            metadata: {
+              orderType: 'sale',
+              paymentStatus: savedSale.paymentStatus,
+              customerPhone: savedSale.customerPhone,
+              customerEmail: savedSale.customerEmail,
+              notes: savedSale.notes
+            }
+          })
         }
       }
       

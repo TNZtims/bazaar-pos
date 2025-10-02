@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Layout from '@/components/Layout'
 import Modal from '@/components/Modal'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 interface SaleItem {
   productName: string
@@ -226,9 +227,7 @@ export default function SalesHistoryPage() {
 
         {/* Sales Table */}
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
-          {loading ? (
-            <div className="p-8 text-center text-gray-600 dark:text-slate-400">Loading sales...</div>
-          ) : sales.length === 0 ? (
+          {sales.length === 0 && !loading ? (
             <div className="p-8 text-center text-gray-500 dark:text-slate-400">
               No sales found matching your criteria.
             </div>
@@ -471,6 +470,14 @@ export default function SalesHistoryPage() {
                   </button>
                 </div>
         </Modal>
+
+        {/* Loading Overlay */}
+        <LoadingOverlay
+          isVisible={loading}
+          title="Loading Sales History"
+          message="Fetching transaction records and sales data..."
+          color="green"
+        />
       </div>
     </Layout>
   )

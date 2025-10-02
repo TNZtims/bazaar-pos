@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import mongoose from 'mongoose'
 import connectToDatabase from '@/lib/mongodb'
 import Sale from '@/models/Sale'
 import Product from '@/models/Product'
@@ -11,6 +12,7 @@ interface ProductSalesData {
   price: number
   cost?: number
   category?: string
+  seller?: string
   totalQuantitySold: number
   totalRevenue: number
   salesCount: number
@@ -36,23 +38,58 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
+    const sellers = searchParams.get('sellers')
+    const paymentStatus = searchParams.get('paymentStatus')
+    const productId = searchParams.get('productId')
     
-    // Get all products for the store
-    const allProducts = await Product.find({ 
-      storeId: authContext.store._id 
-    }).select('_id name price cost category quantity')
+    console.log('🔍 API Request URL:', request.url)
+    console.log('🔍 Search params:', Object.fromEntries(searchParams.entries()))
+    console.log('🔍 Filters:', { startDate, endDate, sellers, paymentStatus, productId })
     
-    // Get sales data for the date range - only include paid and completed sales
+    // Build product filter query
+    const productQuery: Record<string, unknown> = {
+      storeId: authContext.store._id
+    }
+    
+    // Apply sellers filter to products
+    if (sellers) {
+      const sellerArray = sellers.split(',').map(s => s.trim()).filter(s => s.length > 0)
+      if (sellerArray.length > 0) {
+        productQuery.seller = { $in: sellerArray }
+      }
+    }
+    
+    // Get all products for the store (filtered by seller if specified)
+    const allProducts = await Product.find(productQuery).select('_id name price cost category quantity seller')
+    
+    // Get sales data with filters
     const matchStage: Record<string, unknown> = {
       storeId: authContext.store._id,
-      paymentStatus: 'paid',  // Only include paid sales
       status: 'completed'     // Only include completed sales
     }
     
+    // Apply payment status filter (default to paid if not specified)
+    if (paymentStatus && paymentStatus !== 'all') {
+      matchStage.paymentStatus = paymentStatus
+    } else if (!paymentStatus) {
+      matchStage.paymentStatus = 'paid'  // Default to paid sales only
+    }
+    
+    // Note: Sellers filter is applied to products query above
+    
+    // Apply product filter
+    if (productId && productId !== 'all') {
+      matchStage['items.product'] = new mongoose.Types.ObjectId(productId)
+    }
+    
+    // Only apply date filtering if date parameters are explicitly provided
     if (startDate || endDate) {
       matchStage.createdAt = {}
       if (startDate) matchStage.createdAt.$gte = new Date(startDate)
       if (endDate) matchStage.createdAt.$lte = new Date(endDate)
+      console.log('📅 DATE FILTER ACTIVE - Applying date filter:', { startDate, endDate })
+    } else {
+      console.log('📅 NO DATE FILTER - Returning ALL products with complete sales history (ignoring any date restrictions)')
     }
     
     console.log('🔍 Sales match criteria:', JSON.stringify(matchStage, null, 2))
@@ -133,6 +170,7 @@ export async function GET(request: NextRequest) {
         price: product.price,
         cost: product.cost,
         category: product.category,
+        seller: product.seller || 'N/A',
         totalQuantitySold: sales.totalQuantitySold,
         totalRevenue: sales.totalRevenue,
         salesCount: sales.salesCount,
@@ -150,7 +188,8 @@ export async function GET(request: NextRequest) {
       return a.productName.localeCompare(b.productName)
     })
     
-    console.log(`📊 All Products Report: Found ${combinedData.length} products with paid/completed sales data for store ${authContext.store.storeName}`)
+    const dateRangeText = startDate || endDate ? `for date range ${startDate || 'start'} to ${endDate || 'end'}` : 'with complete sales history'
+    console.log(`📊 All Products Report: Found ${combinedData.length} products ${dateRangeText} for store ${authContext.store.storeName}`)
     
     return NextResponse.json(combinedData)
   } catch (error: unknown) {

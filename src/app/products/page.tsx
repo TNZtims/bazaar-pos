@@ -9,13 +9,17 @@ import { useToast } from '@/contexts/ToastContext'
 import { ConfirmationModal } from '@/components/Modal'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWebSocketInventory } from '@/hooks/useWebSocketInventory'
+import LoadingOverlay from '@/components/LoadingOverlay'
+import WebSocketStatus from '@/components/WebSocketStatus'
 
 interface Product {
   _id: string
   name: string
   cost?: number
   price: number
+  discountPrice?: number     // Discounted price
   quantity: number           // Legacy field
+  initialStock: number       // Initial stock when product was first added
   totalQuantity: number      // Total stock
   availableQuantity: number  // Available for sale
   reservedQuantity: number   // Reserved for pending orders
@@ -101,7 +105,9 @@ export default function ProductsPage() {
     updates: inventoryUpdates, 
     deletedProducts,
     isConnected: isWebSocketConnected,
-    error: webSocketError
+    error: webSocketError,
+    connectionQuality,
+    reconnectAttempts
   } = useWebSocketInventory({
     storeId: store?.id || null,
     enabled: !!store?.id
@@ -133,7 +139,9 @@ export default function ProductsPage() {
     name: '',
     cost: '',
     price: '',
+    discountPrice: '', // Discount price field
     quantity: '',  // We'll still use this field name for backward compatibility 
+    initialStock: '', // Initial stock field
     description: '',
     category: '',
     sku: '',
@@ -158,19 +166,49 @@ export default function ProductsPage() {
       setProducts(prevProducts => {
         const updatedProducts = prevProducts.map(product => {
           const update = inventoryUpdates.find(u => u.productId === product._id)
-          if (update && update.quantity !== undefined) {
-            console.log(`📦 Products Page: Updating ${product.name} quantity from ${product.quantity} to ${update.quantity}`)
+          if (update) {
+            console.log(`📦 Products Page: Processing update for ${product.name}`)
+            console.log(`📦 Products Page: Update data:`, update)
             updatedIds.add(product._id)
-            // Create a completely new object to force React re-render
-            return {
-              ...product,
-              _id: product._id, // Ensure _id is preserved
-              quantity: update.quantity,
-              totalQuantity: update.quantity,
-              availableQuantity: update.quantity,
-              reservedQuantity: product.reservedQuantity || 0,
-              // Add a timestamp to force re-render
-              lastUpdated: new Date().toISOString()
+            
+            // If we have full product data (from product-updated event), use it
+            if (update.productData) {
+              console.log(`📦 Products Page: Full product update for ${product.name}, discountPrice:`, update.productData.discountPrice)
+              return {
+                ...product,
+                _id: product._id, // Ensure _id is preserved
+                name: update.productData.name || product.name,
+                price: update.productData.price !== undefined ? update.productData.price : product.price,
+                discountPrice: update.productData.discountPrice !== undefined ? update.productData.discountPrice : product.discountPrice,
+                cost: update.productData.cost !== undefined ? update.productData.cost : product.cost,
+                quantity: update.productData.quantity !== undefined ? update.productData.quantity : (update.quantity !== undefined ? update.quantity : product.quantity),
+                totalQuantity: update.productData.quantity !== undefined ? update.productData.quantity : (update.quantity !== undefined ? update.quantity : product.quantity),
+                availableQuantity: update.productData.quantity !== undefined ? update.productData.quantity : (update.quantity !== undefined ? update.quantity : product.quantity),
+                reservedQuantity: product.reservedQuantity || 0,
+                initialStock: update.productData.initialStock !== undefined ? update.productData.initialStock : (update.initialStock !== undefined ? update.initialStock : product.initialStock),
+                description: update.productData.description !== undefined ? update.productData.description : product.description,
+                category: update.productData.category !== undefined ? update.productData.category : product.category,
+                sku: update.productData.sku !== undefined ? update.productData.sku : product.sku,
+                seller: update.productData.seller !== undefined ? update.productData.seller : product.seller,
+                imageUrl: update.productData.imageUrl !== undefined ? update.productData.imageUrl : product.imageUrl,
+                // Add a timestamp to force re-render
+                lastUpdated: new Date().toISOString()
+              }
+            }
+            // Otherwise, just update quantity and initialStock (legacy inventory-changed event)
+            else if (update.quantity !== undefined) {
+              console.log(`📦 Products Page: Quantity update for ${product.name} from ${product.quantity} to ${update.quantity}`)
+              return {
+                ...product,
+                _id: product._id, // Ensure _id is preserved
+                quantity: update.quantity,
+                totalQuantity: update.quantity,
+                availableQuantity: update.quantity,
+                reservedQuantity: product.reservedQuantity || 0,
+                initialStock: update.initialStock !== undefined ? update.initialStock : product.initialStock,
+                // Add a timestamp to force re-render
+                lastUpdated: new Date().toISOString()
+              }
             }
           }
           return product
@@ -225,9 +263,22 @@ export default function ProductsPage() {
         ...formData,
         cost: formData.cost && formData.cost.trim() !== '' ? parseFloat(formData.cost) : null,
         price: parseFloat(formData.price),
-        totalQuantity: parseInt(formData.quantity)  // Send as totalQuantity to the API
+        discountPrice: formData.discountPrice && formData.discountPrice.trim() !== '' ? parseFloat(formData.discountPrice) : null,
+        quantity: parseInt(formData.quantity),  // Send as quantity to the API
+        initialStock: formData.initialStock && formData.initialStock.trim() !== '' ? parseInt(formData.initialStock) : null // Always send initialStock, null if empty (standalone note field)
       }
       
+
+      console.log('📦 Product data being sent:', productData)
+      console.log('📦 Form data:', formData)
+      console.log('📦 Editing product:', editingProduct ? 'Yes' : 'No')
+      console.log('📦 Discount validation check:', {
+        discountPrice: productData.discountPrice,
+        price: productData.price,
+        isDiscountLessThanPrice: productData.discountPrice ? productData.discountPrice < productData.price : 'N/A'
+      })
+      console.log('📦 initialStock from form:', formData.initialStock)
+      console.log('📦 initialStock parsed:', formData.initialStock && formData.initialStock.trim() !== '' ? parseInt(formData.initialStock) : undefined)
 
       const url = editingProduct ? `/api/products/${editingProduct._id}` : '/api/products'
       const method = editingProduct ? 'PUT' : 'POST'
@@ -239,11 +290,12 @@ export default function ProductsPage() {
       })
 
       if (response.ok) {
-        await response.json()
+        const updatedProduct = await response.json()
+        console.log('📥 Received updated product from API:', updatedProduct)
         
         setShowModal(false)
         setEditingProduct(null)
-        setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '' })
+        setFormData({ name: '', cost: '', price: '', discountPrice: '', quantity: '', initialStock: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '' })
         
         // Refresh products list
         await fetchProducts()
@@ -269,7 +321,9 @@ export default function ProductsPage() {
       name: currentProduct.name,
       cost: currentProduct.cost ? currentProduct.cost.toString() : '',
       price: currentProduct.price.toString(),
+      discountPrice: currentProduct.discountPrice ? currentProduct.discountPrice.toString() : '',
       quantity: (currentProduct.totalQuantity || currentProduct.quantity).toString(),  // Use totalQuantity if available, fallback to legacy quantity
+      initialStock: (currentProduct.initialStock || currentProduct.totalQuantity || currentProduct.quantity).toString(), // Use initialStock if available, fallback to totalQuantity or quantity
       description: currentProduct.description || '',
       category: currentProduct.category || '',
       sku: currentProduct.sku || '',
@@ -410,7 +464,7 @@ export default function ProductsPage() {
 
   const openAddModal = () => {
     setEditingProduct(null)
-    setFormData({ name: '', cost: '', price: '', quantity: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '' })
+    setFormData({ name: '', cost: '', price: '', discountPrice: '', quantity: '', initialStock: '', description: '', category: '', sku: generateSKU(), seller: '', imageUrl: '' })
     setShowModal(true)
   }
 
@@ -421,9 +475,17 @@ export default function ProductsPage() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Products</h1>
-            <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Manage your inventory</p>
-          </div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Products</h1>
+                <WebSocketStatus
+                  isConnected={isWebSocketConnected}
+                  connectionQuality={connectionQuality}
+                  error={webSocketError}
+                  reconnectAttempts={reconnectAttempts}
+                />
+              </div>
+              <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Manage your inventory</p>
+            </div>
           <button
             onClick={openAddModal}
             className="mt-4 sm:mt-0 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -467,9 +529,7 @@ export default function ProductsPage() {
 
         {/* Products Grid */}
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 max-h-[70vh] overflow-auto">
-          {loading ? (
-            <div className="p-8 text-center text-gray-600 dark:text-slate-400">Loading...</div>
-          ) : products.length === 0 ? (
+          {products.length === 0 && !loading ? (
             <div className="p-8 text-center text-gray-500 dark:text-slate-400">
               No products found. {searchTerm ? 'Try a different search term.' : 'Add your first product!'}
             </div>
@@ -497,6 +557,9 @@ export default function ProductsPage() {
                     </th>
                     <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Stock
+                    </th>
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                      Initial Stock
                     </th>
                     <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Category
@@ -533,7 +596,17 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-slate-100">{product.name}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium text-gray-900 dark:text-slate-100">{product.name}</div>
+                            {product.discountPrice && product.discountPrice > 0 && (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                SALE
+                              </span>
+                            )}
+                          </div>
                           {product.description && (
                             <TruncatedDescription description={product.description} />
                           )}
@@ -545,8 +618,24 @@ export default function ProductsPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                         ₱{(product.cost || 0).toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
-                        ₱{product.price.toFixed(2)}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {product.discountPrice && product.discountPrice > 0 ? (
+                          <div className="space-y-1">
+                            <div className="text-gray-500 dark:text-slate-400 line-through text-xs">
+                              ₱{product.price.toFixed(2)}
+                            </div>
+                            <div className="text-red-600 dark:text-red-400 font-semibold">
+                              ₱{product.discountPrice.toFixed(2)}
+                            </div>
+                            <div className="text-green-600 dark:text-green-400 text-xs">
+                              Save ₱{(product.price - product.discountPrice).toFixed(2)}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-gray-900 dark:text-slate-100">
+                            ₱{product.price.toFixed(2)}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         {product.cost ? (
@@ -578,6 +667,9 @@ export default function ProductsPage() {
                             </div>
                           )}
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
+                        {product.initialStock !== null && product.initialStock !== undefined ? product.initialStock : '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                         {product.category || '-'}
@@ -645,7 +737,14 @@ export default function ProductsPage() {
                         }}
                       />
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-gray-900 dark:text-slate-100 truncate">{product.name}</h3>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-medium text-gray-900 dark:text-slate-100 truncate">{product.name}</h3>
+                          {product.discountPrice && product.discountPrice > 0 && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 flex-shrink-0">
+                              SALE
+                            </span>
+                          )}
+                        </div>
                         {product.description && (
                           <p className="text-sm text-gray-600 dark:text-slate-400 mt-1 line-clamp-2">{product.description}</p>
                         )}
@@ -662,7 +761,18 @@ export default function ProductsPage() {
                       </div>
                       <div>
                         <span className="text-gray-500 dark:text-slate-400">Price:</span>
-                        <span className="ml-1 font-medium text-gray-900 dark:text-slate-100">₱{product.price.toFixed(2)}</span>
+                        {product.discountPrice && product.discountPrice > 0 ? (
+                          <div className="ml-1">
+                            <div className="text-gray-500 dark:text-slate-400 line-through text-xs">
+                              ₱{product.price.toFixed(2)}
+                            </div>
+                            <div className="text-red-600 dark:text-red-400 font-semibold">
+                              ₱{product.discountPrice.toFixed(2)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="ml-1 font-medium text-gray-900 dark:text-slate-100">₱{product.price.toFixed(2)}</span>
+                        )}
                       </div>
                       <div>
                         <span className="text-gray-500 dark:text-slate-400">Profit:</span>
@@ -791,9 +901,43 @@ export default function ProductsPage() {
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Discount Price (₱) <span className="text-sm text-gray-500">(optional - leave empty for no discount)</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.discountPrice}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    const price = parseFloat(formData.price)
+                    const discountPrice = parseFloat(value)
+                    
+                    // Validation: discount price must be less than regular price
+                    if (value && price && discountPrice >= price) {
+                      return // Don't update if discount price is >= regular price
+                    }
+                    
+                    setFormData({ ...formData, discountPrice: value })
+                  }}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {formData.discountPrice && formData.price && parseFloat(formData.discountPrice) >= parseFloat(formData.price) && (
+                  <p className="text-red-500 text-xs mt-1">Discount price must be less than regular price (₱{formData.price})</p>
+                )}
+                {formData.discountPrice && parseFloat(formData.discountPrice) > 0 && parseFloat(formData.discountPrice) < parseFloat(formData.price) && (
+                  <p className="text-green-600 text-xs mt-1">
+                    Savings: ₱{(parseFloat(formData.price) - parseFloat(formData.discountPrice)).toFixed(2)} 
+                    ({(((parseFloat(formData.price) - parseFloat(formData.discountPrice)) / parseFloat(formData.price)) * 100).toFixed(1)}% off)
+                  </p>
+                )}
+              </div>
               
               <div className="grid grid-cols-2 gap-4">
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                     Quantity *
@@ -803,6 +947,18 @@ export default function ProductsPage() {
                     required
                     value={formData.quantity}
                     onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    Initial Stock <span className="text-sm text-gray-500">(static note - original stock amount)</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.initialStock}
+                    onChange={(e) => setFormData({ ...formData, initialStock: e.target.value })}
+                    placeholder="Enter original stock amount"
                     className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -947,6 +1103,14 @@ export default function ProductsPage() {
           />
         {/* </div> */}
       </Layout>
+
+      {/* Loading Overlay */}
+      <LoadingOverlay
+        isVisible={loading}
+        title="Loading Products"
+        message="Fetching product inventory and details..."
+        color="blue"
+      />
     </ProtectedRoute>
   )
 }

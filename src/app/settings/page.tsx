@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Layout from '@/components/Layout'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { useToast } from '@/contexts/ToastContext'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 interface StoreData {
   storeName: string
@@ -72,11 +73,13 @@ export default function SettingsPage() {
     return (
       <ProtectedRoute>
         <Layout>
-          <div className="flex items-center justify-center min-h-[50vh]">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600 dark:text-slate-400">Loading settings...</p>
-            </div>
+          <div className="min-h-[50vh]">
+            <LoadingOverlay
+              isVisible={true}
+              title="Loading Settings"
+              message="Fetching store configuration and preferences..."
+              color="purple"
+            />
           </div>
         </Layout>
       </ProtectedRoute>
