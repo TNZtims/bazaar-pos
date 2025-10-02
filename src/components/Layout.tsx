@@ -139,9 +139,32 @@ const Layout = ({ children }: LayoutProps) => {
             {/* Logo */}
             <div className="hidden lg:flex items-center justify-between px-6 py-6 border-b border-slate-200/50 dark:border-slate-700/50">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-lg">P</span>
-                </div>
+                {store?.logoImageUrl ? (
+                  <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg flex-shrink-0">
+                    <img 
+                      src={store.logoImageUrl} 
+                      alt={`${store.storeName} logo`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback to default logo if image fails to load
+                        const target = e.target as HTMLImageElement
+                        target.style.display = 'none'
+                        const parent = target.parentElement
+                        if (parent) {
+                          parent.innerHTML = `
+                            <div class="w-full h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+                              <span class="text-white font-bold text-lg">P</span>
+                            </div>
+                          `
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-lg">P</span>
+                  </div>
+                )}
                 <div>
                   <h1 className="text-xl font-bold gradient-text">BzPOS</h1>
                   <p className="text-xs text-slate-500 dark:text-slate-400">{store?.storeName || 'Point of Sale'}</p>

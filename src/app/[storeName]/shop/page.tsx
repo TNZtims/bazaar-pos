@@ -98,11 +98,186 @@ export default function PublicShopPage() {
   const [selectedImageProduct, setSelectedImageProduct] = useState<Product | null>(null)
   const [showQRCodeModal, setShowQRCodeModal] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [feedback, setFeedback] = useState<any[]>([])
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false)
+  const [feedbackForm, setFeedbackForm] = useState({
+    customerName: '',
+    comment: '',
+    rating: 5
+  })
+  const [randomFeedback, setRandomFeedback] = useState<any[]>([])
+  const [feedbackPositions, setFeedbackPositions] = useState<Array<{top: string, left: string}>>([])
 
   // Set mounted state on client-side
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Fetch feedback and randomize
+  useEffect(() => {
+    const fetchFeedback = async () => {
+      if (storeId) {
+        try {
+          const response = await fetch(`/api/feedback?storeId=${storeId}`)
+          if (response.ok) {
+            const data = await response.json()
+            const allFeedback = data.feedback || []
+            setFeedback(allFeedback)
+            
+            // Randomize and select 3 feedback items
+            if (allFeedback.length > 0) {
+              const shuffled = [...allFeedback].sort(() => 0.5 - Math.random())
+              const selectedFeedback = shuffled.slice(0, 3)
+              setRandomFeedback(selectedFeedback)
+              
+              // Generate random positions for each feedback item (avoiding text areas, collisions, and screen edges)
+              const positions: Array<{top: string, left: string}> = []
+              const minDistance = 15 // Minimum distance between bubbles in percentage
+              const bubbleWidth = 350 // Maximum bubble width in pixels
+              const bubbleHeight = 200 // Maximum bubble height in pixels
+              
+              for (let i = 0; i < selectedFeedback.length; i++) {
+                let attempts = 0
+                let position: {top: string, left: string}
+                let isValidPosition = false
+                
+                while (!isValidPosition && attempts < 50) {
+                  // Avoid center area where main text is (30% to 70% vertically, 25% to 75% horizontally)
+                  // Also ensure bubbles don't go off-screen edges
+                  const top = Math.random() < 0.5 
+                    ? Math.random() * 20 + 10   // Top area: 10% to 30% (increased margin)
+                    : Math.random() * 20 + 65   // Bottom area: 65% to 85% (increased margin)
+                  
+                  const left = Math.random() < 0.5
+                    ? Math.random() * 15 + 10   // Left area: 10% to 25% (increased margin)
+                    : Math.random() * 15 + 70   // Right area: 70% to 85% (increased margin)
+                  
+                  position = { top: `${top}%`, left: `${left}%` }
+                  
+                  // Check collision with existing positions
+                  isValidPosition = positions.every(existingPos => {
+                    const existingTop = parseFloat(existingPos.top)
+                    const existingLeft = parseFloat(existingPos.left)
+                    const currentTop = parseFloat(position.top)
+                    const currentLeft = parseFloat(position.left)
+                    
+                    const distance = Math.sqrt(
+                      Math.pow(currentTop - existingTop, 2) + 
+                      Math.pow(currentLeft - existingLeft, 2)
+                    )
+                    
+                    return distance >= minDistance
+                  })
+                  
+                  // Additional check: ensure bubble doesn't extend beyond screen boundaries
+                  if (isValidPosition) {
+                    const currentTop = parseFloat(position.top)
+                    const currentLeft = parseFloat(position.left)
+                    
+                    // Check if bubble would extend beyond screen edges
+                    const wouldOverflowTop = currentTop < 5 // 5% margin from top
+                    const wouldOverflowBottom = currentTop > 90 // 90% margin from bottom
+                    const wouldOverflowLeft = currentLeft < 5 // 5% margin from left
+                    const wouldOverflowRight = currentLeft > 90 // 90% margin from right
+                    
+                    if (wouldOverflowTop || wouldOverflowBottom || wouldOverflowLeft || wouldOverflowRight) {
+                      isValidPosition = false
+                    }
+                  }
+                  
+                  attempts++
+                }
+                
+                positions.push(position)
+              }
+              setFeedbackPositions(positions)
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching feedback:', error)
+        }
+      }
+    }
+
+    fetchFeedback()
+    const interval = setInterval(fetchFeedback, 30000) // Refresh every 30 seconds
+    return () => clearInterval(interval)
+  }, [storeId])
+
+  // Rotate random feedback every 12 seconds (matching animation duration)
+  useEffect(() => {
+    if (feedback.length > 3) {
+      const rotateInterval = setInterval(() => {
+        const shuffled = [...feedback].sort(() => 0.5 - Math.random())
+        const selectedFeedback = shuffled.slice(0, 3)
+        setRandomFeedback(selectedFeedback)
+        
+        // Generate new random positions for each feedback item (avoiding text areas, collisions, and screen edges)
+        const positions: Array<{top: string, left: string}> = []
+        const minDistance = 15 // Minimum distance between bubbles in percentage
+        const bubbleWidth = 350 // Maximum bubble width in pixels
+        const bubbleHeight = 200 // Maximum bubble height in pixels
+        
+        for (let i = 0; i < selectedFeedback.length; i++) {
+          let attempts = 0
+          let position: {top: string, left: string}
+          let isValidPosition = false
+          
+          while (!isValidPosition && attempts < 50) {
+            // Avoid center area where main text is (30% to 70% vertically, 25% to 75% horizontally)
+            // Also ensure bubbles don't go off-screen edges
+            const top = Math.random() < 0.5 
+              ? Math.random() * 20 + 10   // Top area: 10% to 30% (increased margin)
+              : Math.random() * 20 + 65   // Bottom area: 65% to 85% (increased margin)
+            
+            const left = Math.random() < 0.5
+              ? Math.random() * 15 + 10   // Left area: 10% to 25% (increased margin)
+              : Math.random() * 15 + 70   // Right area: 70% to 85% (increased margin)
+            
+            position = { top: `${top}%`, left: `${left}%` }
+            
+            // Check collision with existing positions
+            isValidPosition = positions.every(existingPos => {
+              const existingTop = parseFloat(existingPos.top)
+              const existingLeft = parseFloat(existingPos.left)
+              const currentTop = parseFloat(position.top)
+              const currentLeft = parseFloat(position.left)
+              
+              const distance = Math.sqrt(
+                Math.pow(currentTop - existingTop, 2) + 
+                Math.pow(currentLeft - existingLeft, 2)
+              )
+              
+              return distance >= minDistance
+            })
+            
+            // Additional check: ensure bubble doesn't extend beyond screen boundaries
+            if (isValidPosition) {
+              const currentTop = parseFloat(position.top)
+              const currentLeft = parseFloat(position.left)
+              
+              // Check if bubble would extend beyond screen edges
+              const wouldOverflowTop = currentTop < 5 // 5% margin from top
+              const wouldOverflowBottom = currentTop > 90 // 90% margin from bottom
+              const wouldOverflowLeft = currentLeft < 5 // 5% margin from left
+              const wouldOverflowRight = currentLeft > 90 // 90% margin from right
+              
+              if (wouldOverflowTop || wouldOverflowBottom || wouldOverflowLeft || wouldOverflowRight) {
+                isValidPosition = false
+              }
+            }
+            
+            attempts++
+          }
+          
+          positions.push(position)
+        }
+        setFeedbackPositions(positions)
+      }, 12000) // Changed to 12 seconds to match animation duration
+      
+      return () => clearInterval(rotateInterval)
+    }
+  }, [feedback])
 
   // Close modal on Escape key
   useEffect(() => {
@@ -1499,6 +1674,38 @@ export default function PublicShopPage() {
   // Determine if store is online for shopping
   const isStoreOnlineForShopping = storeStatus && storeStatus.isOnline
 
+  // Feedback functions
+  const handleSubmitFeedback = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!storeId || !feedbackForm.customerName || !feedbackForm.comment) return
+
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeId,
+          customerName: feedbackForm.customerName,
+          comment: feedbackForm.comment,
+          rating: feedbackForm.rating
+        })
+      })
+
+      if (response.ok) {
+        setFeedbackForm({ customerName: '', comment: '', rating: 5 })
+        setShowFeedbackForm(false)
+        // Refresh feedback
+        const feedbackResponse = await fetch(`/api/feedback?storeId=${storeId}`)
+        if (feedbackResponse.ok) {
+          const data = await feedbackResponse.json()
+          setFeedback(data.feedback || [])
+        }
+      }
+    } catch (error) {
+      console.error('Error submitting feedback:', error)
+    }
+  }
+
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
@@ -1518,6 +1725,52 @@ export default function PublicShopPage() {
         } : {}}
       >
         <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          {/* Random Position Glass-like Feedback Bubbles */}
+          {randomFeedback.length > 0 && feedbackPositions.length > 0 && (
+            <>
+              {randomFeedback.map((item, index) => (
+                <div
+                  key={`${item._id}-${index}`}
+                  className="absolute z-20 bg-white/5 dark:bg-slate-800/5 backdrop-blur-md rounded-3xl p-4 shadow-2xl border border-white/10 dark:border-slate-700/15 min-w-[300px] max-w-[350px] animate-fade-in-out"
+                  style={{
+                    top: feedbackPositions[index]?.top || '50%',
+                    left: feedbackPositions[index]?.left || '50%',
+                    transform: 'translate(-50%, -50%)',
+                    animationDelay: `${index * 0.5}s`
+                  }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-8 h-8 bg-gradient-to-r from-blue-500/80 to-purple-500/80 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30">
+                      <span className="text-white text-sm font-bold">
+                        {item.customerName.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-sm font-semibold text-white/90">
+                        {item.customerName}
+                      </span>
+                      <div className="flex text-yellow-400 mt-1">
+                        {[...Array(5)].map((_, i) => (
+                          <svg
+                            key={i}
+                            className={`w-3 h-3 ${i < item.rating ? 'fill-current' : 'text-white/30'}`}
+                            viewBox="0 0 20 20"
+                          >
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-sm text-white/80 leading-relaxed line-clamp-3">
+                    "{item.comment}"
+                  </p>
+                </div>
+              ))}
+            </>
+          )}
+
+
           {/* Top Bar with Customer Info and Logout */}
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 sm:mb-6">
             <div className="text-center sm:text-left mb-4 sm:mb-0">
@@ -1639,12 +1892,21 @@ export default function PublicShopPage() {
       {store?.id && (
         <div className="bg-white dark:bg-slate-800 py-6">
           <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-center">
+            <div className="flex justify-center items-center gap-4">
               <StarRating 
                 storeId={store.id} 
                 className="justify-center"
                 user={user}
               />
+              <button
+                onClick={() => setShowFeedbackForm(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full transition-all duration-200 border border-blue-500 hover:border-blue-600"
+              >
+                <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                Feedback
+              </button>
             </div>
           </div>
         </div>
@@ -1734,7 +1996,7 @@ export default function PublicShopPage() {
                   return (
                   <div
                     key={product._id}
-                      className={`relative transition-all duration-300 ease-in-out ${
+                      className={`relative transition-all duration-300 ease-in-out flex flex-col ${
                         isOutOfStock
                           ? 'bg-slate-800/50 opacity-60 cursor-not-allowed shadow-[0_1px_3px_0_rgba(0,0,0,0.3),0_1px_2px_0_rgba(0,0,0,0.2)]'
                           : 'bg-slate-800 cursor-pointer shadow-[0_1px_3px_0_rgba(0,0,0,0.3),0_1px_2px_0_rgba(0,0,0,0.2)] hover:shadow-[0_10px_15px_-3px_rgba(0,0,0,0.4),0_4px_6px_-2px_rgba(0,0,0,0.25)] hover:-translate-y-1'
@@ -1807,7 +2069,7 @@ export default function PublicShopPage() {
                   </div>
 
                     {/* Card Content */}
-                    <div className="p-4">
+                    <div className="p-4 flex flex-col flex-grow">
                     {/* Product Name */}
                     <h3 className="text-white font-semibold text-lg mb-1 line-clamp-1">
                       {product.name}
@@ -1892,7 +2154,7 @@ export default function PublicShopPage() {
                     </div>
                   
                     {/* Quantity Selector */}
-                    <div className="flex items-center justify-center mb-4">
+                    <div className="flex items-center justify-center mb-2 mt-auto">
                         <div className="flex items-center bg-slate-700 rounded shadow-sm border border-slate-600">
                           <button
                             onClick={() => {
@@ -1941,19 +2203,20 @@ export default function PublicShopPage() {
                       </div>
                     
                     {/* Add to Cart Button */}
-                    <button
-                        onClick={() => !isOutOfStock && addToCart(product, selectedQuantities[product._id] || 1)}
-                        disabled={isOutOfStock || addingToCart === product._id}
-                        className={`w-full py-3 px-4 rounded font-medium transition-all duration-200 flex items-center justify-center gap-2 uppercase text-sm tracking-wide ${
-                          isOutOfStock
-                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                            : activeTab === 'preorder' 
-                            ? 'bg-orange-600 hover:bg-orange-700 text-white shadow-[0_2px_4px_-1px_rgba(0,0,0,0.3)] hover:shadow-[0_4px_8px_-2px_rgba(0,0,0,0.4)] hover:scale-[1.02]'
-                          : addingToCart === product._id
-                            ? 'bg-blue-600 text-white cursor-wait shadow-[0_2px_4px_-1px_rgba(0,0,0,0.3)]'
-                            : 'bg-blue-600 hover:bg-blue-700 text-white shadow-[0_2px_4px_-1px_rgba(0,0,0,0.3)] hover:shadow-[0_4px_8px_-2px_rgba(0,0,0,0.4)] hover:scale-[1.02]'
-                        }`}
-                    >
+                    <div className="mt-auto">
+                      <button
+                          onClick={() => !isOutOfStock && addToCart(product, selectedQuantities[product._id] || 1)}
+                          disabled={isOutOfStock || addingToCart === product._id}
+                          className={`w-full py-3 px-4 rounded font-medium transition-all duration-200 flex items-center justify-center gap-2 uppercase text-sm tracking-wide ${
+                            isOutOfStock
+                              ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                              : activeTab === 'preorder' 
+                              ? 'bg-orange-600 hover:bg-orange-700 text-white shadow-[0_2px_4px_-1px_rgba(0,0,0,0.3)] hover:shadow-[0_4px_8px_-2px_rgba(0,0,0,0.4)] hover:scale-[1.02]'
+                            : addingToCart === product._id
+                              ? 'bg-blue-600 text-white cursor-wait shadow-[0_2px_4px_-1px_rgba(0,0,0,0.3)]'
+                              : 'bg-blue-600 hover:bg-blue-700 text-white shadow-[0_2px_4px_-1px_rgba(0,0,0,0.3)] hover:shadow-[0_4px_8px_-2px_rgba(0,0,0,0.4)] hover:scale-[1.02]'
+                          }`}
+                      >
                       {isOutOfStock ? (
                         <>
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -1977,7 +2240,8 @@ export default function PublicShopPage() {
                           }
                         </>
                       )}
-                    </button>
+                      </button>
+                    </div>
                     </div> {/* End Card Content */}
                   </div>
                   )
@@ -2500,6 +2764,112 @@ export default function PublicShopPage() {
         qrCodes={store?.qrCodes || {}}
         storeName={store?.name || storeName}
       />
+
+      {/* Feedback Form Modal */}
+      {showFeedbackForm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="mb-6">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white text-center">
+                  Share Your Feedback
+                </h3>
+              </div>
+
+              <form onSubmit={handleSubmitFeedback} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Your Name
+                  </label>
+                  <input
+                    type="text"
+                    value={feedbackForm.customerName}
+                    onChange={(e) => setFeedbackForm(prev => ({ ...prev, customerName: e.target.value }))}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                    placeholder="Enter your name"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Your Rating:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowFeedbackForm(false)}
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowFeedbackForm(true)}
+                      className="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-full text-xs font-medium transition-colors"
+                    >
+                      <svg className="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      Feedback
+                    </button>
+                  </div>
+                  <div className="flex space-x-1">
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <button
+                        key={rating}
+                        type="button"
+                        onClick={() => setFeedbackForm(prev => ({ ...prev, rating }))}
+                        className="text-2xl transition-colors"
+                      >
+                        <svg
+                          className={`w-8 h-8 ${rating <= feedbackForm.rating ? 'text-yellow-400' : 'text-gray-300'}`}
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Your Comment
+                  </label>
+                  <textarea
+                    value={feedbackForm.comment}
+                    onChange={(e) => setFeedbackForm(prev => ({ ...prev, comment: e.target.value }))}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                    placeholder="Share your experience with this store..."
+                    rows={4}
+                    required
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowFeedbackForm(false)}
+                    className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 font-medium"
+                  >
+                    Submit Feedback
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Loading Overlay */}
       <LoadingOverlay

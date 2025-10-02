@@ -90,6 +90,18 @@ app.prepare().then(() => {
       })
     })
 
+    // Handle store status updates
+    socket.on('store-status-update', (data) => {
+      const { storeId, isOnline, isActive } = data
+      
+      // Broadcast store status changes to all clients in the store
+      socket.to(`store-${storeId}`).emit('store-status-changed', {
+        isOnline,
+        isActive,
+        timestamp: new Date().toISOString()
+      })
+    })
+
     socket.on('disconnect', () => {
       console.log('Client disconnected:', socket.id)
       
@@ -105,6 +117,11 @@ app.prepare().then(() => {
 
   // Make io instance available globally for API routes
   global.io = io
+  
+  // Log when store status changes are emitted
+  io.on('store-status-changed', (data) => {
+    console.log('🏪 Server: Store status changed event received:', data)
+  })
 
   httpServer
     .once('error', (err) => {

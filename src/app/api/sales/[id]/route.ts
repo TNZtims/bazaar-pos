@@ -222,14 +222,16 @@ async function handleUpdateItems(sale: any, updateData: any) {
             throw new Error(`Insufficient stock for ${product.name}. Available: ${product.quantity}`)
           }
           
-          const itemTotal = product.price * item.quantity
+          // Use discount price if available, otherwise use regular price
+          const effectivePrice = product.discountPrice && product.discountPrice > 0 ? product.discountPrice : product.price
+          const itemTotal = effectivePrice * item.quantity
           totalAmount += itemTotal
           
           saleItems.push({
             product: product._id,
             productName: product.name,
             quantity: item.quantity,
-            unitPrice: product.price,
+            unitPrice: effectivePrice,
             totalPrice: itemTotal
           })
         }

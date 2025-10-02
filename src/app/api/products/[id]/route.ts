@@ -138,6 +138,26 @@ export async function PUT(
       { new: true, runValidators: true }
     )
     
+    // Create audit log for quantity changes
+    if (quantity !== undefined && currentProduct.quantity !== quantity) {
+      const quantityChange = quantity - currentProduct.quantity
+      await createAuditLog({
+        productId: id,
+        productName: product.name,
+        storeId: authContext.store._id.toString(),
+        storeName: authContext.store.storeName,
+        action: 'adjustment',
+        quantityChange: quantityChange,
+        previousQuantity: currentProduct.quantity,
+        newQuantity: quantity,
+        reason: 'Manual quantity adjustment via product edit',
+        userId: authContext.user._id.toString(),
+        metadata: {
+          notes: `Quantity changed from ${currentProduct.quantity} to ${quantity} (${quantityChange > 0 ? '+' : ''}${quantityChange})`
+        }
+      })
+    }
+    
     // Force migration for existing products - check if initialStock field exists at all
     console.log('🔧 Checking product for migration:', {
       id: product._id,

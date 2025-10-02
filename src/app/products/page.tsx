@@ -99,6 +99,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [updatedProductIds, setUpdatedProductIds] = useState<Set<string>>(new Set())
+  const [storeStatus, setStoreStatus] = useState<{ isOnline: boolean; isActive: boolean; isLocked: boolean } | null>(null)
   
   // Real-time inventory updates via WebSocket
   const { 
@@ -152,6 +153,145 @@ export default function ProductsPage() {
   useEffect(() => {
     fetchProducts()
   }, [searchTerm])
+
+  // Fetch store status to determine if public store is open
+  const fetchStoreStatus = async () => {
+    try {
+      const response = await fetch('/api/stores/status')
+      if (response.ok) {
+        const data = await response.json()
+        setStoreStatus({ 
+          isOnline: data.isOnline, 
+          isActive: data.isActive,
+          isLocked: data.isLocked || false // Default to false if not provided
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching store status:', error)
+    }
+  }
+
+  useEffect(() => {
+    fetchStoreStatus()
+  }, [])
+
+  // Listen for page visibility changes and window focus to refresh store status
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('👁️ Products Page: Page became visible, refreshing store status')
+        fetchStoreStatus()
+      }
+    }
+
+    const handleWindowFocus = () => {
+      console.log('🎯 Products Page: Window focused, refreshing store status')
+      fetchStoreStatus()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleWindowFocus)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleWindowFocus)
+    }
+  }, [])
+
+  // Real-time store status updates via WebSocket
+  useEffect(() => {
+    if (!store?.id) {
+      console.log('🔌 Products Page: No store ID available')
+      return
+    }
+    
+    console.log('🔌 Products Page: Setting up WebSocket for store status updates, store:', store.id)
+    
+    // Import socket.io-client dynamically
+    import('socket.io-client').then(({ io }) => {
+      // Get the current host and protocol for WebSocket connection
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const host = window.location.host
+      const wsUrl = `${window.location.protocol}//${host}`
+      
+      console.log('🔌 Products Page: WebSocket URL:', wsUrl)
+      
+      const socket = io(wsUrl, {
+        transports: ['websocket', 'polling'],
+        timeout: 5000,
+        reconnection: true,
+        reconnectionDelay: 2000,
+        reconnectionAttempts: 5,
+        forceNew: true
+      })
+      
+      socket.on('connect', () => {
+        console.log('🔌 Products Page: WebSocket connected for store status')
+        // Join store-specific room
+        socket.emit('join-store', store.id)
+        console.log('🔌 Products Page: Joined store room:', store.id)
+      })
+      
+      socket.on('connect_error', (err) => {
+        console.error('🔌 Products Page: WebSocket connection error:', err)
+      })
+      
+      socket.on('disconnect', () => {
+        console.log('🔌 Products Page: WebSocket disconnected')
+      })
+      
+      socket.on('reconnect', () => {
+        console.log('🔌 Products Page: WebSocket reconnected')
+        socket.emit('join-store', store.id)
+      })
+      
+      // Listen for store status changes
+      socket.on('store-status-changed', (data: { isOnline: boolean; isActive: boolean; isLocked: boolean }) => {
+        console.log('🏪 Products Page: Store status changed via WebSocket:', data)
+        setStoreStatus({ 
+          isOnline: data.isOnline, 
+          isActive: data.isActive,
+          isLocked: data.isLocked || false
+        })
+        
+        // Show notification about status change
+        if (data.isOnline && !data.isLocked) {
+          success('Store is now open - Product editing disabled', 'Store Status Changed')
+        } else {
+          success('Store is now closed - Product editing enabled', 'Store Status Changed')
+        }
+      })
+      
+      // Add periodic status check as fallback (more frequent)
+      const statusCheckInterval = setInterval(async () => {
+        try {
+          const response = await fetch('/api/stores/status')
+          if (response.ok) {
+            const data = await response.json()
+            setStoreStatus(prevStatus => {
+              if (!prevStatus || prevStatus.isOnline !== data.isOnline || prevStatus.isActive !== data.isActive || prevStatus.isLocked !== (data.isLocked || false)) {
+                console.log('🔄 Products Page: Store status updated via polling:', data)
+                return { 
+                  isOnline: data.isOnline, 
+                  isActive: data.isActive,
+                  isLocked: data.isLocked || false
+                }
+              }
+              return prevStatus
+            })
+          }
+        } catch (error) {
+          console.error('🔄 Products Page: Error checking store status:', error)
+        }
+      }, 5000) // Check every 5 seconds for faster updates
+      
+      return () => {
+        console.log('🔌 Products Page: Cleaning up WebSocket connection')
+        clearInterval(statusCheckInterval)
+        socket.disconnect()
+      }
+    })
+  }, [store?.id, success])
 
   // Apply real-time inventory updates to products
   useEffect(() => {
@@ -483,8 +623,37 @@ export default function ProductsPage() {
                   error={webSocketError}
                   reconnectAttempts={reconnectAttempts}
                 />
+                {/* Store Status Indicator */}
+                {storeStatus && (
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
+                    (storeStatus.isOnline && !storeStatus.isLocked)
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
+                      : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                  }`}>
+                    <div className={`w-2 h-2 rounded-full ${
+                      (storeStatus.isOnline && !storeStatus.isLocked) ? 'bg-green-500' : 'bg-red-500'
+                    }`}></div>
+                    <span>{(storeStatus.isOnline && !storeStatus.isLocked) ? 'Store Open' : 'Store Closed'}</span>
+                    <button
+                      onClick={fetchStoreStatus}
+                      className="ml-1 p-1 hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
+                      title="Refresh store status"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </div>
-              <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Manage your inventory</p>
+              <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
+                Manage your inventory
+                {(storeStatus?.isOnline && !storeStatus?.isLocked) && (
+                  <span className="ml-2 text-orange-600 dark:text-orange-400">
+                    • Product editing disabled while store is open
+                  </span>
+                )}
+              </p>
             </div>
           <button
             onClick={openAddModal}
@@ -680,7 +849,13 @@ export default function ProductsPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                         <button
                           onClick={() => handleEdit(product)}
-                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 inline-flex items-center gap-1"
+                          disabled={(storeStatus?.isOnline === true && storeStatus?.isLocked === false)}
+                          className={`inline-flex items-center gap-1 ${
+                            (storeStatus?.isOnline === true && storeStatus?.isLocked === false)
+                              ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50'
+                              : 'text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300'
+                          }`}
+                          title={(storeStatus?.isOnline === true && storeStatus?.isLocked === false) ? 'Cannot edit products while public store is open' : 'Edit product'}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -812,7 +987,13 @@ export default function ProductsPage() {
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleEdit(product)}
-                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium touch-manipulation px-3 py-2 inline-flex items-center gap-1"
+                          disabled={(storeStatus?.isOnline === true && storeStatus?.isLocked === false)}
+                          className={`text-sm font-medium touch-manipulation px-3 py-2 inline-flex items-center gap-1 ${
+                            (storeStatus?.isOnline === true && storeStatus?.isLocked === false)
+                              ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50'
+                              : 'text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300'
+                          }`}
+                          title={(storeStatus?.isOnline === true && storeStatus?.isLocked === false) ? 'Cannot edit products while public store is open' : 'Edit product'}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />

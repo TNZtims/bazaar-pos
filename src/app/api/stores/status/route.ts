@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     await connectToDatabase()
 
     const store = await Store.findById(authContext.store._id)
-      .select('storeName isOnline isActive')
+      .select('storeName isOnline isActive isLocked')
 
     if (!store) {
       return NextResponse.json(
@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       storeName: store.storeName,
       isOnline: store.isOnline,
-      isActive: store.isActive
+      isActive: store.isActive,
+      isLocked: store.isLocked
     })
   } catch (error: any) {
     return NextResponse.json(
@@ -67,7 +68,7 @@ export async function PATCH(request: NextRequest) {
       authContext.store._id,
       updateData,
       { new: true, runValidators: true }
-    ).select('storeName isOnline isActive')
+    ).select('storeName isOnline isActive isLocked')
 
     if (!store) {
       return NextResponse.json(
@@ -76,10 +77,32 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
+    // Emit WebSocket event for store status change
+    if (global.io) {
+      console.log(`🏪 API: Emitting store status change for store ${store._id}:`, { isOnline: store.isOnline, isActive: store.isActive, isLocked: store.isLocked })
+      console.log(`🏪 API: Available rooms:`, Array.from(global.io.sockets.adapter.rooms.keys()))
+      
+      const roomName = `store-${store._id}`
+      const room = global.io.sockets.adapter.rooms.get(roomName)
+      console.log(`🏪 API: Clients in room ${roomName}:`, room ? room.size : 0)
+      
+      global.io.to(roomName).emit('store-status-changed', {
+        isOnline: store.isOnline,
+        isActive: store.isActive,
+        isLocked: store.isLocked,
+        timestamp: new Date().toISOString()
+      })
+      
+      console.log(`🏪 API: Store status event emitted to room ${roomName}`)
+    } else {
+      console.log('🏪 API: Global.io not available for WebSocket emission')
+    }
+
     return NextResponse.json({
       storeName: store.storeName,
       isOnline: store.isOnline,
-      isActive: store.isActive
+      isActive: store.isActive,
+      isLocked: store.isLocked
     })
   } catch (error: any) {
     return NextResponse.json(

@@ -9,6 +9,7 @@ interface Store {
   isAdmin: boolean
   cashiers: string[]
   selectedCashier?: string
+  logoImageUrl?: string
 }
 
 interface AuthContextType {

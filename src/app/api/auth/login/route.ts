@@ -68,7 +68,8 @@ export async function POST(request: NextRequest) {
         storeName: store.storeName,
         isAdmin: store.isAdmin,
         cashiers: store.cashiers,
-        selectedCashier: selectedCashier
+        selectedCashier: selectedCashier,
+        logoImageUrl: store.logoImageUrl
       }
     })
     

@@ -65,13 +65,37 @@ export async function PATCH(
       id,
       updateData,
       { new: true, runValidators: true }
-    ).select('_id storeName isActive isLocked isAdmin')
+    ).select('_id storeName isActive isLocked isAdmin isOnline')
     
     if (!store) {
       return NextResponse.json(
         { message: 'Store not found' },
         { status: 404 }
       )
+    }
+    
+    // Emit WebSocket event for store status change
+    if (global.io) {
+      console.log(`🏪 Admin API: Emitting store status change for store ${store._id}:`, { 
+        isOnline: store.isOnline, 
+        isActive: store.isActive,
+        isLocked: store.isLocked 
+      })
+      
+      const roomName = `store-${store._id}`
+      const room = global.io.sockets.adapter.rooms.get(roomName)
+      console.log(`🏪 Admin API: Clients in room ${roomName}:`, room ? room.size : 0)
+      
+      global.io.to(roomName).emit('store-status-changed', {
+        isOnline: store.isOnline,
+        isActive: store.isActive,
+        isLocked: store.isLocked,
+        timestamp: new Date().toISOString()
+      })
+      
+      console.log(`🏪 Admin API: Store status event emitted to room ${roomName}`)
+    } else {
+      console.log('🏪 Admin API: Global.io not available for WebSocket emission')
     }
     
     // Generate appropriate success message

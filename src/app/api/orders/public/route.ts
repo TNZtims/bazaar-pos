@@ -106,14 +106,16 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      const itemTotal = product.price * item.quantity
+      // Use discount price if available, otherwise use regular price
+      const effectivePrice = product.discountPrice && product.discountPrice > 0 ? product.discountPrice : product.price
+      const itemTotal = effectivePrice * item.quantity
       subtotal += itemTotal
       
       validatedItems.push({
         product: product._id,
         productName: product.name,
         quantity: item.quantity,
-        unitPrice: product.price,
+        unitPrice: effectivePrice,
         totalPrice: itemTotal
       })
     }

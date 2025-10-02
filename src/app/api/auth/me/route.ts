@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
         storeName: store.storeName,
         isAdmin: store.isAdmin,
         cashiers: store.cashiers,
-        selectedCashier: selectedCashier
+        selectedCashier: selectedCashier,
+        logoImageUrl: store.logoImageUrl
       }
     })
   } catch (error: unknown) {
