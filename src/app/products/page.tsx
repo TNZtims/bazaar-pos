@@ -559,45 +559,6 @@ export default function ProductsPage() {
     )
   }
 
-  const handleStockTransfer = () => {
-    const totalProducts = products.length
-    const totalCurrentStock = products.reduce((sum, product) => sum + (product.quantity || 0), 0)
-    
-    showConfirmation(
-      'Transfer Stock to Initial Stock',
-      `This will transfer the current stock values to initial stock for ALL ${totalProducts} products and set current stock to 0.\n\nTotal current stock: ${totalCurrentStock} units\n\nThis action cannot be undone.`,
-      async () => {
-        setSubmitting(true)
-        
-        try {
-          const response = await fetch('/api/products/transfer-stock', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          })
-
-          if (response.ok) {
-            closeConfirmation()
-            fetchProducts()
-            success('Stock transfer completed successfully!', 'Transfer Complete')
-          } else {
-            const errorData = await response.json()
-            error(errorData.message || 'Error transferring stock', 'Transfer Failed')
-          }
-        } catch (err) {
-          console.error('Error transferring stock:', err)
-          error('Error transferring stock', 'Transfer Failed')
-        } finally {
-          setSubmitting(false)
-        }
-      },
-      'warning',
-      submitting ? 'Transferring...' : 'Transfer Stock',
-      'Cancel'
-    )
-  }
-
   const generateSKU = () => {
     // Generate a random SKU in format: PRD-YYMMDD-XXXX
     const now = new Date()
@@ -682,9 +643,9 @@ export default function ProductsPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                     </button>
-              </div>
+                  </div>
                 )}
-            </div>
+              </div>
               <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
                 Manage your inventory
                 {(storeStatus?.isOnline && !storeStatus?.isLocked) && (
@@ -694,26 +655,15 @@ export default function ProductsPage() {
                 )}
               </p>
             </div>
-          <div className="flex flex-col sm:flex-row gap-2 mt-4 sm:mt-0">
           <button
             onClick={openAddModal}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="mt-4 sm:mt-0 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Add Product
           </button>
-            <button
-              onClick={handleStockTransfer}
-              className="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 transition-colors flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-              </svg>
-              Transfer Stock
-            </button>
-          </div>
         </div>
 
         {/* Search */}

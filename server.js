@@ -36,19 +36,6 @@ app.prepare().then(() => {
   // Store connections by store ID for targeted broadcasts
   const storeConnections = new Map()
 
-  // Function to broadcast online users count to a store
-  const broadcastOnlineUsersCount = (storeId) => {
-    const connections = storeConnections.get(storeId)
-    const count = connections ? connections.size : 0
-    
-    io.to(`store-${storeId}`).emit('online-users-count', {
-      type: 'online-users-count',
-      count: count
-    })
-    
-    console.log(`📊 Store ${storeId}: ${count} users online`)
-  }
-
   io.on('connection', (socket) => {
     console.log('Client connected:', socket.id)
 
@@ -63,23 +50,6 @@ app.prepare().then(() => {
       storeConnections.get(storeId).add(socket.id)
       
       console.log(`Socket ${socket.id} joined store ${storeId}`)
-      
-      // Broadcast updated online users count
-      broadcastOnlineUsersCount(storeId)
-    })
-
-    // Handle online users count request
-    socket.on('get-online-users', (data) => {
-      const { storeId } = data
-      if (storeId) {
-        const connections = storeConnections.get(storeId)
-        const count = connections ? connections.size : 0
-        
-        socket.emit('online-users-count', {
-          type: 'online-users-count',
-          count: count
-        })
-      }
     })
 
     // Handle inventory updates
@@ -135,17 +105,11 @@ app.prepare().then(() => {
     socket.on('disconnect', () => {
       console.log('Client disconnected:', socket.id)
       
-      // Clean up store connections and broadcast updated count
+      // Clean up store connections
       storeConnections.forEach((connections, storeId) => {
-        if (connections.has(socket.id)) {
-          connections.delete(socket.id)
-          
-          // Broadcast updated online users count
-          broadcastOnlineUsersCount(storeId)
-          
-          if (connections.size === 0) {
-            storeConnections.delete(storeId)
-          }
+        connections.delete(socket.id)
+        if (connections.size === 0) {
+          storeConnections.delete(storeId)
         }
       })
     })

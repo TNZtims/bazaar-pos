@@ -107,54 +107,11 @@ export default function PublicShopPage() {
   })
   const [randomFeedback, setRandomFeedback] = useState<any[]>([])
   const [feedbackPositions, setFeedbackPositions] = useState<Array<{top: string, left: string}>>([])
-  const [onlineUsers, setOnlineUsers] = useState<number>(0)
 
   // Set mounted state on client-side
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  // Track online users with Socket.IO
-  useEffect(() => {
-    if (!storeId || !mounted) return
-
-    let socket: any = null
-
-    // Import socket.io-client dynamically
-    import('socket.io-client').then(({ io }) => {
-      socket = io('http://localhost:3000')
-      
-      socket.on('connect', () => {
-        console.log('Connected to Socket.IO for online users tracking')
-        // Join the store room
-        socket.emit('join-store', storeId)
-        // Request current online users count
-        socket.emit('get-online-users', { storeId })
-      })
-
-      socket.on('online-users-count', (data) => {
-        if (data.type === 'online-users-count') {
-          setOnlineUsers(data.count || 0)
-        }
-      })
-
-      socket.on('disconnect', () => {
-        console.log('Disconnected from Socket.IO')
-      })
-
-      socket.on('connect_error', (error) => {
-        console.error('Socket.IO connection error:', error)
-      })
-    }).catch(error => {
-      console.error('Error loading Socket.IO client:', error)
-    })
-
-    return () => {
-      if (socket) {
-        socket.disconnect()
-      }
-    }
-  }, [storeId, mounted])
 
   // Fetch feedback and randomize
   useEffect(() => {
@@ -1814,7 +1771,7 @@ export default function PublicShopPage() {
           )}
 
 
-          {/* Top Bar with Customer Info, Online Users, and Logout */}
+          {/* Top Bar with Customer Info and Logout */}
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 sm:mb-6">
             <div className="text-center sm:text-left mb-4 sm:mb-0">
               <div className="text-blue-100 dark:text-blue-200 text-sm sm:text-base font-medium">
@@ -1825,26 +1782,16 @@ export default function PublicShopPage() {
               </div>
             </div>
             
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              {/* Online Users Counter */}
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/20">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-white text-sm font-medium">
-                  {onlineUsers} online
-                </span>
-              </div>
-              
               <button
                 onClick={logout}
-                className="self-center sm:self-start bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-all duration-200 font-medium text-sm sm:text-base backdrop-blur-sm border border-white/20 hover:border-white/30 touch-manipulation"
+              className="self-center sm:self-start bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-all duration-200 font-medium text-sm sm:text-base backdrop-blur-sm border border-white/20 hover:border-white/30 touch-manipulation"
               >
-                <svg className="w-4 h-4 sm:w-5 sm:h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
                 Logout
               </button>
             </div>
-          </div>
 
           <div className="text-center">
             {/* Store Logo */}
