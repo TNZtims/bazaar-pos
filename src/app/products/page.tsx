@@ -62,7 +62,7 @@ function TruncatedDescription({ description, maxLength = 50 }: TruncatedDescript
 
   return (
     <div 
-      className="text-sm text-slate-400 relative inline-block"
+      className="text-sm text-gray-500 dark:text-slate-400 relative inline-block"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -74,7 +74,7 @@ function TruncatedDescription({ description, maxLength = 50 }: TruncatedDescript
       </span>
       {shouldTruncate && isHovered && (
         <div 
-          className="fixed z-[9999] bg-slate-800 border border-slate-600 rounded-lg p-3 shadow-xl max-w-sm whitespace-normal text-slate-100 pointer-events-none min-w-[200px]"
+          className="fixed z-[9999] bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg p-3 shadow-xl max-w-sm whitespace-normal text-gray-900 dark:text-slate-100 pointer-events-none min-w-[200px]"
           style={{
             top: `${tooltipPosition.top}px`,
             left: `${tooltipPosition.left}px`,
@@ -217,14 +217,12 @@ export default function ProductsPage() {
       console.log('🔌 Products Page: WebSocket URL:', wsUrl)
       
       const socket = io(wsUrl, {
-        transports: ['polling'], // Railway compatibility
-        timeout: 20000,
+        transports: ['websocket', 'polling'],
+        timeout: 5000,
         reconnection: true,
-        reconnectionDelay: 3000,
-        reconnectionAttempts: 3,
-        forceNew: true,
-        upgrade: false,
-        withCredentials: false
+        reconnectionDelay: 2000,
+        reconnectionAttempts: 5,
+        forceNew: true
       })
       
       socket.on('connect', () => {
@@ -401,38 +399,6 @@ export default function ProductsPage() {
     setSubmitting(true)
     
     try {
-      // Safety check: ensure editingProduct exists and has _id when updating
-      if (editingProduct && !editingProduct._id) {
-        console.error('❌ Editing product is missing _id:', editingProduct)
-        error('Error: Product ID is missing. Please try again.', 'Update Failed')
-        setSubmitting(false)
-        return
-      }
-
-      // Additional safety check: if we're in edit mode but editingProduct is null
-      if (showModal && editingProduct === null && formData.name) {
-        console.error('❌ Form is in edit mode but editingProduct is null')
-        error('Error: Product data is missing. Please close and reopen the edit form.', 'Update Failed')
-        setSubmitting(false)
-        return
-      }
-
-      // Validate required fields
-      if (!formData.name || !formData.price || !formData.quantity) {
-        console.error('❌ Missing required fields:', { name: formData.name, price: formData.price, quantity: formData.quantity })
-        error('Error: Please fill in all required fields (Name, Price, Quantity).', 'Validation Failed')
-        setSubmitting(false)
-        return
-      }
-
-      // Additional check: if we're updating but editingProduct is null, this is a state inconsistency
-      if (editingProduct === null && showModal) {
-        console.error('❌ State inconsistency: showModal is true but editingProduct is null')
-        error('Error: Form state is inconsistent. Please close and reopen the edit form.', 'State Error')
-        setSubmitting(false)
-        return
-      }
-
       const productData = {
         ...formData,
         cost: formData.cost && formData.cost.trim() !== '' ? parseFloat(formData.cost) : null,
@@ -446,7 +412,6 @@ export default function ProductsPage() {
       console.log('📦 Product data being sent:', productData)
       console.log('📦 Form data:', formData)
       console.log('📦 Editing product:', editingProduct ? 'Yes' : 'No')
-      console.log('📦 Editing product _id:', editingProduct?._id)
       console.log('📦 Discount validation check:', {
         discountPrice: productData.discountPrice,
         price: productData.price,
@@ -488,24 +453,8 @@ export default function ProductsPage() {
   }
 
   const handleEdit = (product: Product) => {
-    // Safety check: ensure product has _id
-    if (!product || !product._id) {
-      console.error('❌ Cannot edit product: missing _id', product)
-      error('Error: Product data is invalid. Please try again.', 'Edit Failed')
-      return
-    }
-
     // Get the most up-to-date product data from the current products state
     const currentProduct = products.find(p => p._id === product._id) || product
-    
-    // Double-check that we have a valid product
-    if (!currentProduct || !currentProduct._id) {
-      console.error('❌ Cannot edit product: current product missing _id', currentProduct)
-      error('Error: Product data is invalid. Please try again.', 'Edit Failed')
-      return
-    }
-    
-    console.log('📝 Editing product:', currentProduct.name, 'ID:', currentProduct._id)
     
     setEditingProduct(currentProduct)
     setFormData({
@@ -706,7 +655,7 @@ export default function ProductsPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-slate-100">Products</h1>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Products</h1>
                 <WebSocketStatus
                   isConnected={isWebSocketConnected}
                   connectionQuality={connectionQuality}
@@ -736,7 +685,7 @@ export default function ProductsPage() {
                   </div>
                 )}
               </div>
-              <p className="mt-1 text-sm text-slate-400">
+              <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
                 Manage your inventory
                 {(storeStatus?.isOnline && !storeStatus?.isLocked) && (
                   <span className="ml-2 text-orange-600 dark:text-orange-400">
@@ -768,14 +717,14 @@ export default function ProductsPage() {
         </div>
 
         {/* Search */}
-        <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700 p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-4">
           <div className="flex gap-3 items-center">
             <input
               type="text"
               placeholder="Search products..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1 px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {/* WebSocket Connection Status */}
             <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 dark:bg-slate-700 rounded-lg">
@@ -790,7 +739,7 @@ export default function ProductsPage() {
               }`}>
                 {isWebSocketConnected ? 'Live' : 'Offline'}
               </span>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-gray-500 dark:text-slate-400">
                 ({inventoryUpdates.length} updates)
               </span>
             </div>
@@ -798,55 +747,55 @@ export default function ProductsPage() {
         </div>
 
         {/* Products Grid */}
-        <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700 max-h-[70vh] overflow-auto">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 max-h-[70vh] overflow-auto">
           {products.length === 0 && !loading ? (
-            <div className="p-8 text-center text-slate-400">
+            <div className="p-8 text-center text-gray-500 dark:text-slate-400">
               No products found. {searchTerm ? 'Try a different search term.' : 'Add your first product!'}
             </div>
           ) : (
             <>
               {/* Desktop Table */}
               <div className="hidden md:block">
-                <table className="min-w-full divide-y divide-slate-700">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
                 <thead className="bg-gray-50 dark:bg-slate-700">
                   <tr>
-                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Image
                     </th>
-                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Product
                     </th>
-                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Cost
                     </th>
-                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Price
                     </th>
-                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Profit
                     </th>
-                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Stock
                     </th>
-                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Initial Stock
                     </th>
-                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Category
                     </th>
-                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-2 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Seller
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-slate-800 divide-y divide-slate-700">
+                <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
                   {products.map((product) => (
                     <tr 
                       key={`${product._id}-${product.lastUpdated || Date.now()}`} 
-                      className={`hover:bg-slate-700 transition-all duration-500 ${
+                      className={`hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-500 ${
                         updatedProductIds.has(product._id) 
                           ? 'animate-pulse scale-[1.02] bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-400 shadow-lg' 
                           : ''
@@ -867,7 +816,7 @@ export default function ProductsPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="flex items-center gap-2">
-                            <div className="text-sm font-medium text-slate-100">{product.name}</div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-slate-100">{product.name}</div>
                             {product.discountPrice && product.discountPrice > 0 && (
                               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
                                 <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -885,13 +834,13 @@ export default function ProductsPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                         ₱{(product.cost || 0).toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         {product.discountPrice && product.discountPrice > 0 ? (
                           <div className="space-y-1">
-                            <div className="text-slate-400 line-through text-xs">
+                            <div className="text-gray-500 dark:text-slate-400 line-through text-xs">
                               ₱{product.price.toFixed(2)}
                             </div>
                             <div className="text-red-600 dark:text-red-400 font-semibold">
@@ -902,7 +851,7 @@ export default function ProductsPage() {
                             </div>
                           </div>
                         ) : (
-                          <div className="text-slate-100">
+                          <div className="text-gray-900 dark:text-slate-100">
                             ₱{product.price.toFixed(2)}
                           </div>
                         )}
@@ -913,7 +862,7 @@ export default function ProductsPage() {
                             ₱{(product.price - product.cost).toFixed(2)} ({(((product.price - product.cost) / product.cost) * 100).toFixed(1)}%)
                           </span>
                         ) : (
-                          <span className="text-slate-400 text-sm">
+                          <span className="text-gray-500 dark:text-slate-400 text-sm">
                             No cost data
                           </span>
                         )}
@@ -932,19 +881,19 @@ export default function ProductsPage() {
                             {product.availableQuantity !== undefined ? product.availableQuantity : product.quantity} Available
                           </div>
                           {product.totalQuantity !== undefined && (
-                            <div className="text-xs text-slate-400 mt-1">
+                            <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                               Total: {product.totalQuantity}, Reserved: {product.reservedQuantity || 0}
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                         {product.initialStock !== null && product.initialStock !== undefined ? product.initialStock : '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                         {product.category || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                         {product.seller || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
@@ -997,7 +946,7 @@ export default function ProductsPage() {
                 {products.map((product) => (
                   <div 
                     key={`${product._id}-${product.lastUpdated || Date.now()}`} 
-                    className={`border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-slate-700 transition-all duration-500 ${
+                    className={`border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-white dark:bg-slate-700 transition-all duration-500 ${
                       updatedProductIds.has(product._id) 
                         ? 'animate-pulse scale-[1.02] bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-400 shadow-lg' 
                         : ''
@@ -1014,7 +963,7 @@ export default function ProductsPage() {
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-medium text-slate-100 truncate">{product.name}</h3>
+                          <h3 className="font-medium text-gray-900 dark:text-slate-100 truncate">{product.name}</h3>
                           {product.discountPrice && product.discountPrice > 0 && (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 flex-shrink-0">
                               SALE
@@ -1022,7 +971,7 @@ export default function ProductsPage() {
                           )}
                         </div>
                         {product.description && (
-                          <p className="text-sm text-slate-400 mt-1 line-clamp-2">{product.description}</p>
+                          <p className="text-sm text-gray-600 dark:text-slate-400 mt-1 line-clamp-2">{product.description}</p>
                         )}
                         {product.sku && (
                           <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">SKU: {product.sku}</p>
@@ -1032,14 +981,14 @@ export default function ProductsPage() {
 
                     <div className="grid grid-cols-2 gap-3 text-sm mb-3">
                       <div>
-                        <span className="text-slate-400">Cost:</span>
-                        <span className="ml-1 font-medium text-slate-100">₱{product.cost?.toFixed(2) || '0.00'}</span>
+                        <span className="text-gray-500 dark:text-slate-400">Cost:</span>
+                        <span className="ml-1 font-medium text-gray-900 dark:text-slate-100">₱{product.cost?.toFixed(2) || '0.00'}</span>
                       </div>
                       <div>
-                        <span className="text-slate-400">Price:</span>
+                        <span className="text-gray-500 dark:text-slate-400">Price:</span>
                         {product.discountPrice && product.discountPrice > 0 ? (
                           <div className="ml-1">
-                            <div className="text-slate-400 line-through text-xs">
+                            <div className="text-gray-500 dark:text-slate-400 line-through text-xs">
                               ₱{product.price.toFixed(2)}
                             </div>
                             <div className="text-red-600 dark:text-red-400 font-semibold">
@@ -1047,15 +996,15 @@ export default function ProductsPage() {
                             </div>
                           </div>
                         ) : (
-                          <span className="ml-1 font-medium text-slate-100">₱{product.price.toFixed(2)}</span>
+                          <span className="ml-1 font-medium text-gray-900 dark:text-slate-100">₱{product.price.toFixed(2)}</span>
                         )}
                       </div>
                       <div>
-                        <span className="text-slate-400">Profit:</span>
+                        <span className="text-gray-500 dark:text-slate-400">Profit:</span>
                         <span className="ml-1 font-medium text-green-600 dark:text-green-400">₱{((product.price - (product.cost || 0))).toFixed(2)}</span>
                       </div>
                       <div>
-                        <span className="text-slate-400">Stock:</span>
+                        <span className="text-gray-500 dark:text-slate-400">Stock:</span>
                         <div className="ml-1">
                           <span className={`font-medium transition-all duration-500 ${
                             (product.availableQuantity || product.quantity) > 10 ? 'text-green-600 dark:text-green-400' :
@@ -1069,15 +1018,15 @@ export default function ProductsPage() {
                             {product.availableQuantity !== undefined ? product.availableQuantity : product.quantity} Available
                           </span>
                           {product.totalQuantity !== undefined && (
-                            <div className="text-xs text-slate-400">
+                            <div className="text-xs text-gray-500 dark:text-slate-400">
                               Total: {product.totalQuantity} | Reserved: {product.reservedQuantity || 0}
                             </div>
                           )}
                         </div>
                       </div>
                       <div className="col-span-2">
-                        <span className="text-slate-400">Seller:</span>
-                        <span className="ml-1 font-medium text-slate-100">{product.seller || '-'}</span>
+                        <span className="text-gray-500 dark:text-slate-400">Seller:</span>
+                        <span className="ml-1 font-medium text-gray-900 dark:text-slate-100">{product.seller || '-'}</span>
                       </div>
                     </div>
 
@@ -1137,13 +1086,13 @@ export default function ProductsPage() {
       {showModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="backdrop-blur-md bg-white/95 dark:bg-slate-900/95 rounded-xl max-w-md w-full p-6 border border-slate-200/50 dark:border-slate-700/50 shadow-2xl mx-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-semibold text-slate-100 mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">
               {editingProduct ? 'Edit Product' : 'Add Product'}
             </h2>
             
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                   Product Name *
                 </label>
                 <input
@@ -1151,13 +1100,13 @@ export default function ProductsPage() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                     Cost (₱) <span className="text-sm text-gray-500">(for profit tracking)</span>
                   </label>
                   <input
@@ -1166,11 +1115,11 @@ export default function ProductsPage() {
                     value={formData.cost}
                     onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
                     placeholder="0.00"
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                     Price (₱) *
                   </label>
                   <input
@@ -1179,13 +1128,13 @@ export default function ProductsPage() {
                     required
                     value={formData.price}
                     onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                   Discount Price (₱) <span className="text-sm text-gray-500">(optional - leave empty for no discount)</span>
                 </label>
                 <input
@@ -1206,7 +1155,7 @@ export default function ProductsPage() {
                     setFormData({ ...formData, discountPrice: value })
                   }}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 {formData.discountPrice && formData.price && parseFloat(formData.discountPrice) >= parseFloat(formData.price) && (
                   <p className="text-red-500 text-xs mt-1">Discount price must be less than regular price (₱{formData.price})</p>
@@ -1221,7 +1170,7 @@ export default function ProductsPage() {
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                     Quantity *
                   </label>
                   <input
@@ -1229,11 +1178,11 @@ export default function ProductsPage() {
                     required
                     value={formData.quantity}
                     onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                     Initial Stock <span className="text-sm text-gray-500">(static note - original stock amount)</span>
                   </label>
                   <input
@@ -1241,26 +1190,26 @@ export default function ProductsPage() {
                     value={formData.initialStock}
                     onChange={(e) => setFormData({ ...formData, initialStock: e.target.value })}
                     placeholder="Enter original stock amount"
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                     Category
                   </label>
                   <input
                     type="text"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                     Seller
                   </label>
                   <input
@@ -1268,14 +1217,14 @@ export default function ProductsPage() {
                     value={formData.seller}
                     onChange={(e) => setFormData({ ...formData, seller: e.target.value })}
                     placeholder="Seller/supplier name"
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
               
               
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                   SKU
                 </label>
                 <div className="flex space-x-2">
@@ -1283,25 +1232,25 @@ export default function ProductsPage() {
                       type="text"
                       value={formData.sku}
                       onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                      className="flex-1 px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, sku: generateSKU() })}
-                      className="px-3 py-2 bg-gray-100 dark:bg-slate-600 text-slate-300 rounded-md hover:bg-gray-200 dark:hover:bg-slate-500 transition-colors text-sm"
+                      className="px-3 py-2 bg-gray-100 dark:bg-slate-600 text-gray-700 dark:text-slate-300 rounded-md hover:bg-gray-200 dark:hover:bg-slate-500 transition-colors text-sm"
                       title="Generate new SKU"
                     >
                       🔄
                     </button>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                   Auto-generated SKU. Click 🔄 to generate a new one.
                 </p>
               </div>
 
               {/* Product Image Upload */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Product Image <span className="text-sm text-gray-500">(optional)</span>
                 </label>
                 <ImageUpload
@@ -1309,20 +1258,20 @@ export default function ProductsPage() {
                   onImageChange={(imageUrl) => setFormData({ ...formData, imageUrl })}
                   onImageRemove={() => setFormData({ ...formData, imageUrl: '' })}
                 />
-                <p className="text-xs text-slate-400 mt-2">
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
                   Upload an image or take a photo. Leave empty to use default category-based image.
                 </p>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                   Description
                 </label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={3}
-                  className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               
@@ -1330,7 +1279,7 @@ export default function ProductsPage() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors flex items-center gap-2"
+                  className="px-4 py-2 text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors flex items-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1339,7 +1288,7 @@ export default function ProductsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || (editingProduct && !editingProduct._id)}
+                  disabled={submitting}
                   className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                 >
                   {submitting ? (
