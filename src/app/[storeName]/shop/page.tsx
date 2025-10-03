@@ -108,7 +108,6 @@ export default function PublicShopPage() {
   const [randomFeedback, setRandomFeedback] = useState<any[]>([])
   const [feedbackPositions, setFeedbackPositions] = useState<Array<{top: string, left: string}>>([])
   const [onlineUsers, setOnlineUsers] = useState<number>(0)
-  const [onlineUsersList, setOnlineUsersList] = useState<Array<{socketId: string, name: string, avatar: string | null}>>([])
 
   // Set mounted state on client-side
   useEffect(() => {
@@ -117,42 +116,25 @@ export default function PublicShopPage() {
 
   // Track online users with Socket.IO
   useEffect(() => {
-    if (!storeId || !mounted || !user) return
+    if (!storeId || !mounted) return
 
     let socket: any = null
 
     // Import socket.io-client dynamically
     import('socket.io-client').then(({ io }) => {
-      // Get the current host and protocol for WebSocket connection
-      const wsUrl = `${window.location.protocol}//${window.location.host}`
-      console.log('🔌 Shop Page: WebSocket URL:', wsUrl)
-      socket = io(wsUrl, {
-        transports: ['polling'], // Railway compatibility
-        timeout: 20000,
-        reconnection: true,
-        reconnectionDelay: 3000,
-        reconnectionAttempts: 3,
-        forceNew: true,
-        upgrade: false,
-        withCredentials: false
-      })
+      socket = io('http://localhost:3000')
       
       socket.on('connect', () => {
         console.log('Connected to Socket.IO for online users tracking')
-        // Join the store room with user info
-        socket.emit('join-store', {
-          storeId,
-          userName: user.name || 'Guest',
-          userAvatar: null
-        })
-        // Request current online users info
+        // Join the store room
+        socket.emit('join-store', storeId)
+        // Request current online users count
         socket.emit('get-online-users', { storeId })
       })
 
-      socket.on('online-users-update', (data: any) => {
-        if (data.type === 'online-users-update') {
+      socket.on('online-users-count', (data) => {
+        if (data.type === 'online-users-count') {
           setOnlineUsers(data.count || 0)
-          setOnlineUsersList(data.users || [])
         }
       })
 
@@ -160,7 +142,7 @@ export default function PublicShopPage() {
         console.log('Disconnected from Socket.IO')
       })
 
-      socket.on('connect_error', (error: any) => {
+      socket.on('connect_error', (error) => {
         console.error('Socket.IO connection error:', error)
       })
     }).catch(error => {
@@ -172,7 +154,7 @@ export default function PublicShopPage() {
         socket.disconnect()
       }
     }
-  }, [storeId, mounted, user])
+  }, [storeId, mounted])
 
   // Fetch feedback and randomize
   useEffect(() => {
@@ -197,10 +179,10 @@ export default function PublicShopPage() {
               const bubbleWidth = 350 // Maximum bubble width in pixels
               const bubbleHeight = 200 // Maximum bubble height in pixels
               
-        for (let i = 0; i < selectedFeedback.length; i++) {
-          let attempts = 0
-          let position: {top: string, left: string} = {top: '50%', left: '50%'}
-          let isValidPosition = false
+              for (let i = 0; i < selectedFeedback.length; i++) {
+                let attempts = 0
+                let position: {top: string, left: string}
+                let isValidPosition = false
                 
                 while (!isValidPosition && attempts < 50) {
                   // Avoid center area where main text is (30% to 70% vertically, 25% to 75% horizontally)
@@ -281,7 +263,7 @@ export default function PublicShopPage() {
         
         for (let i = 0; i < selectedFeedback.length; i++) {
           let attempts = 0
-          let position: {top: string, left: string} = {top: '50%', left: '50%'}
+          let position: {top: string, left: string}
           let isValidPosition = false
           
           while (!isValidPosition && attempts < 50) {
@@ -1769,13 +1751,13 @@ export default function PublicShopPage() {
 
 
   return (
-    <div className="min-h-screen bg-slate-900 dark">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
       {/* Store Banner */}
       <div 
         className={`relative ${
           (store?.bannerImageUrl && store.bannerImageUrl !== 'null' && store.bannerImageUrl !== '' && store.bannerImageUrl !== null) 
             ? '' 
-            : 'bg-gradient-to-r from-blue-800 to-purple-800'
+            : 'bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-800 dark:to-purple-800'
         }`}
         style={(store?.bannerImageUrl && store.bannerImageUrl !== 'null' && store.bannerImageUrl !== '' && store.bannerImageUrl !== null) ? {
           backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url("${store.bannerImageUrl}")`,
@@ -1792,7 +1774,7 @@ export default function PublicShopPage() {
               {randomFeedback.map((item, index) => (
                 <div
                   key={`${item._id}-${index}`}
-                  className="absolute z-20 bg-slate-800/5 backdrop-blur-md rounded-3xl p-4 shadow-2xl border border-slate-700/15 min-w-[300px] max-w-[350px] animate-fade-in-out"
+                  className="absolute z-20 bg-white/5 dark:bg-slate-800/5 backdrop-blur-md rounded-3xl p-4 shadow-2xl border border-white/10 dark:border-slate-700/15 min-w-[300px] max-w-[350px] animate-fade-in-out"
                   style={{
                     top: feedbackPositions[index]?.top || '50%',
                     left: feedbackPositions[index]?.left || '50%',
@@ -1835,7 +1817,7 @@ export default function PublicShopPage() {
           {/* Top Bar with Customer Info, Online Users, and Logout */}
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 sm:mb-6">
             <div className="text-center sm:text-left mb-4 sm:mb-0">
-              <div className="text-blue-200 text-sm sm:text-base font-medium">
+              <div className="text-blue-100 dark:text-blue-200 text-sm sm:text-base font-medium">
                 Welcome back,
               </div>
               <div className="text-white text-lg sm:text-xl font-semibold">
@@ -1844,45 +1826,12 @@ export default function PublicShopPage() {
             </div>
             
             <div className="flex flex-col sm:flex-row items-center gap-4">
-              {/* Online Users Counter with Avatars */}
+              {/* Online Users Counter */}
               <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/20">
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                 <span className="text-white text-sm font-medium">
                   {onlineUsers} online
                 </span>
-                {onlineUsersList.length > 0 && (
-                  <div className="flex -space-x-2 ml-2">
-                    {onlineUsersList.slice(0, 5).map((user, index) => (
-                      <div
-                        key={user.socketId}
-                        className="relative group"
-                        style={{ zIndex: onlineUsersList.length - index }}
-                      >
-                        <div className="w-8 h-8 rounded-full border-2 border-white/30 bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-semibold overflow-hidden">
-                          {user.avatar ? (
-                            <img
-                              src={user.avatar}
-                              alt={user.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span>{user.name.charAt(0).toUpperCase()}</span>
-                          )}
-                        </div>
-                        {/* Tooltip */}
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black/80 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-                          {user.name}
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black/80"></div>
-                        </div>
-                      </div>
-                    ))}
-                    {onlineUsersList.length > 5 && (
-                      <div className="w-8 h-8 rounded-full border-2 border-white/30 bg-gray-500 flex items-center justify-center text-white text-xs font-semibold">
-                        +{onlineUsersList.length - 5}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
               
               <button
@@ -1900,7 +1849,7 @@ export default function PublicShopPage() {
           <div className="text-center">
             {/* Store Logo */}
             <div className="mb-3">
-              <div className="inline-flex items-center justify-center w-24 h-24 bg-slate-800 rounded-full shadow-lg overflow-hidden">
+              <div className="inline-flex items-center justify-center w-24 h-24 bg-white dark:bg-slate-800 rounded-full shadow-lg overflow-hidden">
                 {(store?.logoImageUrl && store.logoImageUrl !== 'null' && store.logoImageUrl !== '' && store.logoImageUrl !== null) ? (
                   <img 
                     src={store.logoImageUrl} 
@@ -1913,7 +1862,7 @@ export default function PublicShopPage() {
                       const parent = target.parentElement
                       if (parent) {
                         parent.innerHTML = `
-                          <svg class="w-12 h-12 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg class="w-12 h-12 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H9m0 0H5m0 0h4m6 0v1a1 1 0 11-2 0v-1m2-1V9a1 1 0 00-1-1H8a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1z"></path>
                           </svg>
                         `
@@ -1921,7 +1870,7 @@ export default function PublicShopPage() {
                     }}
                   />
                 ) : (
-                <svg className="w-12 h-12 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-12 h-12 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H9m0 0H5m0 0h4m6 0v1a1 1 0 11-2 0v-1m2-1V9a1 1 0 00-1-1H8a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1z" />
                 </svg>
                 )}
@@ -1942,7 +1891,7 @@ export default function PublicShopPage() {
             </div>
             
             {/* Store Description */}
-            <p className="text-blue-200 text-base sm:text-lg mb-4 max-w-3xl mx-auto">
+            <p className="text-blue-100 dark:text-blue-200 text-base sm:text-lg mb-4 max-w-3xl mx-auto">
               {activeTab === 'shop' 
                 ? 'Welcome to our Company Bazaar Week! Browse delicious homemade foods, fresh viands, tasty snacks, and unique products from fellow colleagues and departments. Support your teammates while enjoying amazing deals!'
                 : 'Get ahead of the bazaar rush! Preorder your favorite foods, viands, and special items from Company Bazaar Week. Secure the best homemade dishes and exclusive deals before they sell out!'
@@ -1953,19 +1902,19 @@ export default function PublicShopPage() {
             <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
               <div className="text-center">
                 <div className="text-xl font-bold text-white">{products.length}+</div>
-                <div className="text-blue-200 text-xs">Foods & Items</div>
+                <div className="text-blue-100 dark:text-blue-200 text-xs">Foods & Items</div>
                   </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-white">🍽️</div>
-                <div className="text-blue-200 text-xs">Fresh Viands</div>
+                <div className="text-blue-100 dark:text-blue-200 text-xs">Fresh Viands</div>
                 </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-white">🥘</div>
-                <div className="text-blue-200 text-xs">Homemade Dishes</div>
+                <div className="text-blue-100 dark:text-blue-200 text-xs">Homemade Dishes</div>
               </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-white">🤝</div>
-                <div className="text-blue-200 text-xs">Support Colleagues</div>
+                <div className="text-blue-100 dark:text-blue-200 text-xs">Support Colleagues</div>
               </div>
             </div>
             
@@ -2025,10 +1974,10 @@ export default function PublicShopPage() {
             <div className="mb-4 sm:mb-6">
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                 <div className="flex-1">
-                  <h2 className="text-2xl font-bold text-slate-100">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100">
                     {activeTab === 'shop' ? 'Available Products' : 'Today\'s Menu'}
                   </h2>
-                  <p className="text-sm text-slate-400 mt-1 max-w-4xl">
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1 max-w-4xl">
                     {activeTab === 'shop' 
                       ? 'Discover mouth-watering foods and viands from your colleagues during Company Bazaar Week! From homemade kakanin and freshly cooked ulam to delicious snacks and handcrafted items, everything is ready for immediate purchase and pickup.'
                       : 'Reserve the most sought-after foods and viands! Preorder popular dishes, special kakanin, fresh ulam, and exclusive items from your fellow employees to guarantee your favorites during the bazaar event.'
@@ -2041,11 +1990,11 @@ export default function PublicShopPage() {
             {/* Search */}
             <div className="mb-4 sm:mb-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 mb-3">
-                <div className="flex items-center text-slate-400 sm:ml-auto">
+                <div className="flex items-center text-gray-600 dark:text-slate-400 sm:ml-auto">
                   <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                   </svg>
-                  <span className="font-bold text-slate-100 mr-2 text-lg">
+                  <span className="font-bold text-gray-900 dark:text-slate-100 mr-2 text-lg">
                     {filteredProducts.length}
                   </span>
                   <span className="text-base font-medium">
@@ -2055,7 +2004,7 @@ export default function PublicShopPage() {
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-5 w-5 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                 </div>
@@ -2064,14 +2013,14 @@ export default function PublicShopPage() {
                   placeholder={`Search ${activeTab === 'shop' ? 'products' : 'preorder items'}...`}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-slate-600 rounded-xl bg-slate-800 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm hover:shadow-md transition-all duration-200"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm hover:shadow-md transition-all duration-200"
                 />
                 {search && (
                   <button
                     onClick={() => setSearch('')}
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   >
-                    <svg className="h-4 w-4 text-slate-500 hover:text-slate-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-4 w-4 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
@@ -2084,13 +2033,13 @@ export default function PublicShopPage() {
               {filteredProducts.length === 0 ? (
                 <div className="col-span-full text-center py-12">
                   <div className="max-w-sm mx-auto">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-slate-700 rounded-full flex items-center justify-center">
-                      <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
+                      <svg className="w-8 h-8 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                       </svg>
                     </div>
-                    <p className="text-slate-400 text-lg font-medium mb-2">No products found</p>
-                    <p className="text-slate-500 text-sm">Try adjusting your search terms</p>
+                    <p className="text-gray-500 dark:text-slate-400 text-lg font-medium mb-2">No products found</p>
+                    <p className="text-gray-400 dark:text-slate-500 text-sm">Try adjusting your search terms</p>
                   </div>
                 </div>
               ) : (
@@ -2356,12 +2305,12 @@ export default function PublicShopPage() {
 
           {/* Reserved Items */}
           <div className="xl:col-span-2 order-1 xl:order-2">
-            <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700 p-4 sm:p-6 lg:sticky lg:top-8 xl:mt-32">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-4 sm:p-6 lg:sticky lg:top-8 xl:mt-32">
               {/* Reserved Items Header with Tabs */}
-              <div className="border-b border-slate-700 mb-4 pb-3">
+              <div className="border-b border-gray-200 dark:border-slate-700 mb-4 pb-3">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold text-slate-100 flex items-center">
-                    <svg className="w-5 h-5 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 flex items-center">
+                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h1.586a1 1 0 01.707.293l1.414 1.414a1 1 0 00.707.293H20a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                     </svg>
                     Reservations
@@ -2374,15 +2323,15 @@ export default function PublicShopPage() {
                     onClick={() => setActiveCartTab('cart')}
                     className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                       activeCartTab === 'cart'
-                        ? 'bg-blue-900/30 text-blue-300'
-                        : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                        : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
                     }`}
                   >
                     {activeTab === 'preorder' ? 'Preorder' : 'Cart'} (
                     <span 
                       className={`${
                         activeTab === 'preorder' && shouldPulsePreorder && preorderCart.length > 0
-                          ? 'animate-pulse-notification text-orange-400 font-bold' 
+                          ? 'animate-pulse-notification text-orange-500 dark:text-orange-400 font-bold' 
                           : ''
                       }`}
                     >
@@ -2394,8 +2343,8 @@ export default function PublicShopPage() {
                     onClick={() => setActiveCartTab('confirmed')}
                     className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                       activeCartTab === 'confirmed'
-                        ? 'bg-green-900/30 text-green-300'
-                        : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700'
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                        : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
                     }`}
                   >
                     Confirmed ({confirmedReservations.length})
@@ -2404,8 +2353,8 @@ export default function PublicShopPage() {
               </div>
               {activeCartTab === 'cart' ? (
                 (activeTab === 'preorder' ? preorderCart.length : cart.length) === 0 ? (
-                  <p className="text-slate-400 text-center py-8">
-                    <svg className="w-12 h-12 mx-auto mb-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <p className="text-gray-500 dark:text-slate-400 text-center py-8">
+                    <svg className="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h1.586a1 1 0 01.707.293l1.414 1.414a1 1 0 00.707.293H20a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                     </svg>
                     No items in cart yet
@@ -2418,7 +2367,7 @@ export default function PublicShopPage() {
                     {(activeTab === 'preorder' ? preorderCart : cart).map((item) => (
                       <div
                         key={item.product._id}
-                        className="flex items-center p-3 bg-slate-700 rounded-lg space-x-3"
+                        className="flex items-center p-3 bg-gray-50 dark:bg-slate-700 rounded-lg space-x-3"
                       >
                         {/* Product Image */}
                         <div className="flex-shrink-0 relative group cursor-pointer" onClick={() => setSelectedImageProduct(item.product)}>
@@ -2441,10 +2390,10 @@ export default function PublicShopPage() {
                         </div>
                         
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-slate-100 truncate">
+                          <p className="font-medium text-gray-900 dark:text-slate-100 truncate">
                             {item.product.name}
                           </p>
-                          <p className="text-sm text-slate-400">
+                          <p className="text-sm text-gray-600 dark:text-slate-400">
                             ₱{getEffectivePrice(item.product).toFixed(2)} × {item.quantity}
                           </p>
                         </div>
@@ -2480,7 +2429,7 @@ export default function PublicShopPage() {
 
                   <div className="border-t border-gray-200 dark:border-slate-600 pt-4">
                     <div className="flex justify-between items-center mb-4">
-                      <span className="text-lg font-semibold text-slate-100">
+                      <span className="text-lg font-semibold text-gray-900 dark:text-slate-100">
                         Total: ₱{getTotalAmount().toFixed(2)}
                       </span>
                     </div>
@@ -2517,7 +2466,7 @@ export default function PublicShopPage() {
                       )}
                     </button>
 
-                    <p className="text-xs text-slate-400 mt-2 text-center">
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-2 text-center">
                       Reservations require admin approval
                     </p>
                   </div>
@@ -2526,8 +2475,8 @@ export default function PublicShopPage() {
               ) : (
                 // Confirmed Reservations Tab
                 confirmedReservations.length === 0 ? (
-                  <p className="text-slate-400 text-center py-8">
-                    <svg className="w-12 h-12 mx-auto mb-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <p className="text-gray-500 dark:text-slate-400 text-center py-8">
+                    <svg className="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     No confirmed reservations yet
@@ -2543,7 +2492,7 @@ export default function PublicShopPage() {
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center">
-                            <svg className="w-4 h-4 text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
                             <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
@@ -2576,7 +2525,7 @@ export default function PublicShopPage() {
                               </span>
                               </div>
                               
-                              <span className="text-slate-100 font-medium">
+                              <span className="text-gray-900 dark:text-slate-100 font-medium">
                                 ₱{item.totalPrice.toFixed(2)}
                               </span>
                             </div>
@@ -2601,7 +2550,7 @@ export default function PublicShopPage() {
                                   <div className="text-blue-800 dark:text-blue-300 font-medium mb-1">Recent Payments:</div>
                                   {reservation.payments.slice(0, 3).map((payment: any, index: number) => (
                                     <div key={index} className="flex justify-between text-xs">
-                                      <span className="text-blue-400">
+                                      <span className="text-blue-600 dark:text-blue-400">
                                         {new Date(payment.date).toLocaleDateString()} ({payment.method})
                                       </span>
                                       <span className="font-medium text-blue-900 dark:text-blue-100">₱{payment.amount.toFixed(2)}</span>
@@ -2614,7 +2563,7 @@ export default function PublicShopPage() {
                         )}
                         
                         <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-600">
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-gray-500 dark:text-slate-400">
                             {new Date(reservation.createdAt).toLocaleDateString()}
                           </span>
                           <span className="font-semibold text-slate-800 dark:text-slate-200">
@@ -2638,10 +2587,10 @@ export default function PublicShopPage() {
           <div className="backdrop-blur-md bg-white/95 dark:bg-slate-900/95 rounded-xl shadow-2xl max-w-md w-full border border-slate-200/50 dark:border-slate-700/50 max-h-[90vh] overflow-y-auto">
             <div className="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-slate-100">Confirm Order</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Confirm Order</h3>
                 <button
                   onClick={() => setShowConfirmModal(false)}
-                  className="text-slate-500 hover:text-gray-600 dark:hover:text-slate-300"
+                  className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300"
                 >
                   <span className="sr-only">Close</span>
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2660,7 +2609,7 @@ export default function PublicShopPage() {
                 
                 <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-slate-100">Order Summary</h4>
+                    <h4 className="font-medium text-gray-900 dark:text-slate-100">Order Summary</h4>
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                       activeTab === 'preorder' 
                         ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' 
@@ -2685,29 +2634,29 @@ export default function PublicShopPage() {
                         </div>
                         
                         <div className="flex-1">
-                          <div className="font-medium text-slate-100">
+                          <div className="font-medium text-gray-900 dark:text-slate-100">
                             {item.product.name}
                           </div>
-                          <div className="text-xs text-slate-400">
+                          <div className="text-xs text-gray-500 dark:text-slate-400">
                             ₱{getEffectivePrice(item.product).toFixed(2)} × {item.quantity}
                           </div>
                         </div>
                         
-                        <span className="text-slate-100 font-medium">
+                        <span className="text-gray-900 dark:text-slate-100 font-medium">
                           ₱{(getEffectivePrice(item.product) * item.quantity).toFixed(2)}
                         </span>
                       </div>
                     ))}
                     <div className="border-t border-gray-200 dark:border-slate-600 pt-2 mt-2">
                       <div className="flex justify-between font-semibold">
-                        <span className="text-slate-100">Total:</span>
-                        <span className="text-slate-100">₱{getTotalAmount().toFixed(2)}</span>
+                        <span className="text-gray-900 dark:text-slate-100">Total:</span>
+                        <span className="text-gray-900 dark:text-slate-100">₱{getTotalAmount().toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-gray-500 dark:text-slate-400">
                   {editingOrder 
                     ? 'Your order changes will be saved and you can track the updated order status.'
                     : 'Your order will be confirmed and you can track its status and payment details in the Confirmed tab.'
@@ -2717,7 +2666,7 @@ export default function PublicShopPage() {
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
                     onClick={() => setShowConfirmModal(false)}
-                    className="flex-1 px-4 py-3 border border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors touch-manipulation"
+                    className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors touch-manipulation"
                   >
                     Cancel
                   </button>
@@ -2741,15 +2690,15 @@ export default function PublicShopPage() {
       {/* Image Modal */}
       {selectedImageProduct && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedImageProduct(null)}>
-          <div className="bg-slate-800 rounded-xl shadow-2xl max-w-6xl w-full max-h-[85vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-6xl w-full max-h-[85vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-600">
-              <h3 className="text-xl sm:text-2xl font-bold text-slate-100 truncate pr-4">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-600">
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-100 truncate pr-4">
                 {selectedImageProduct.name}
               </h3>
               <button
                 onClick={() => setSelectedImageProduct(null)}
-                className="flex-shrink-0 p-2 text-gray-400 hover:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-700 rounded-full transition-all duration-200"
+                className="flex-shrink-0 p-2 text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-700 rounded-full transition-all duration-200"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2781,7 +2730,7 @@ export default function PublicShopPage() {
               </div>
               
               {/* Details Section - Right Side */}
-              <div className="flex-1 p-4 sm:p-6 overflow-y-auto bg-slate-800">
+              <div className="flex-1 p-4 sm:p-6 overflow-y-auto bg-white dark:bg-slate-800">
                 <div className="space-y-6">
                   {/* Price Badge */}
                   <div className="flex items-center gap-3">
@@ -2794,12 +2743,12 @@ export default function PublicShopPage() {
                           </span>
                         </div>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs text-red-400 font-medium">Sale Price:</span>
+                          <span className="text-xs text-red-600 dark:text-red-400 font-medium">Sale Price:</span>
                           <span className="inline-flex items-center px-4 py-2 rounded-full text-lg font-bold bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
                             ₱{selectedImageProduct.discountPrice.toFixed(2)}
                           </span>
                         </div>
-                        <span className="text-xs text-green-400 font-medium">
+                        <span className="text-xs text-green-600 dark:text-green-400 font-medium">
                           Save ₱{(selectedImageProduct.price - selectedImageProduct.discountPrice).toFixed(2)} 
                           ({(((selectedImageProduct.price - selectedImageProduct.discountPrice) / selectedImageProduct.price) * 100).toFixed(0)}% off)
                         </span>
@@ -2822,31 +2771,31 @@ export default function PublicShopPage() {
                   {/* Product Details */}
                   <div className="space-y-4">
                     <div>
-                      <h4 className="text-lg font-semibold text-slate-100 mb-3 flex items-center">
+                      <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-3 flex items-center">
                         <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         Product Information
                       </h4>
-                      <div className="bg-slate-700 rounded-lg p-4 space-y-2">
+                      <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4 space-y-2">
                         <p className="text-gray-700 dark:text-slate-300">
-                          <span className="font-semibold text-slate-100">Name:</span> {selectedImageProduct.name}
+                          <span className="font-semibold text-gray-900 dark:text-slate-100">Name:</span> {selectedImageProduct.name}
                         </p>
                         <p className="text-gray-700 dark:text-slate-300">
-                          <span className="font-semibold text-slate-100">Availability:</span> {getActualAvailableQuantity(selectedImageProduct)} units available
+                          <span className="font-semibold text-gray-900 dark:text-slate-100">Availability:</span> {getActualAvailableQuantity(selectedImageProduct)} units available
                         </p>
                       </div>
                     </div>
                     
                     {selectedImageProduct.description && (
                       <div>
-                        <h4 className="text-lg font-semibold text-slate-100 mb-3 flex items-center">
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-3 flex items-center">
                           <svg className="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
                           Description
                         </h4>
-                        <div className="bg-slate-700 rounded-lg p-4">
+                        <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4">
                           <p className="text-gray-700 dark:text-slate-300 leading-relaxed">
                             {selectedImageProduct.description}
                           </p>
@@ -2872,7 +2821,7 @@ export default function PublicShopPage() {
       {/* Feedback Form Modal */}
       {showFeedbackForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="mb-6">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white text-center">
