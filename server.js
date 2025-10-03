@@ -22,6 +22,9 @@ const handle = app.getRequestHandler()
 app.prepare().then(() => {
   const httpServer = createServer(async (req, res) => {
     try {
+      // Debug all requests
+      console.log('📥 Request:', req.method, req.url, req.headers.origin)
+      
       // Add Socket.IO health check endpoint
       if (req.url === '/socket.io-health') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -42,31 +45,18 @@ app.prepare().then(() => {
     }
   })
 
-  // Initialize Socket.IO with Railway-optimized settings
+  // Initialize Socket.IO with minimal configuration for Railway
   const io = new Server(httpServer, {
     cors: {
-      origin: dev ? "*" : ["https://bzpos.outdoorequippedservice.com", "https://www.bzpos.outdoorequippedservice.com"],
-      methods: ["GET", "POST", "OPTIONS"],
-      credentials: false, // Railway doesn't support credentials with CORS
-      allowedHeaders: ["*"]
+      origin: "*", // Allow all origins for now to test
+      methods: ["GET", "POST"],
+      credentials: false
     },
-    transports: ['polling'], // Start with polling only for Railway compatibility
-    allowEIO3: true,
-    pingTimeout: 30000,
-    pingInterval: 25000,
-    connectTimeout: 20000,
-    upgradeTimeout: 10000,
-    maxHttpBufferSize: 1e6,
-    serveClient: false // Disable client serving in production
+    transports: ['polling'],
+    allowEIO3: true
   })
 
-  // Add debugging for Socket.IO server
-  console.log('🔌 Socket.IO server initialized with config:', {
-    cors: io.engine.opts.cors,
-    transports: io.engine.opts.transports,
-    pingTimeout: io.engine.opts.pingTimeout,
-    pingInterval: io.engine.opts.pingInterval
-  })
+  console.log('🔌 Socket.IO server initialized')
 
   // Make io globally available for API routes
   global.io = io
@@ -103,34 +93,8 @@ app.prepare().then(() => {
     console.log(`📊 Store ${storeId}: ${users.length} users online`, users.map(u => u.name))
   }
 
-  // Add connection debugging with Railway-specific handling
-  io.engine.on('connection_error', (err) => {
-    console.error('🔌 Socket.IO engine connection error:', {
-      message: err.message,
-      code: err.code,
-      context: err.context,
-      type: err.type,
-      description: err.description
-    })
-    
-    // Railway-specific error handling
-    if (isRailway) {
-      console.log('🚂 Railway detected - using polling-only mode')
-    }
-  })
-
   io.on('connection', (socket) => {
-    console.log('🔌 New client connected:', socket.id, 'from:', socket.handshake.address)
-    console.log('🔌 Handshake details:', {
-      headers: socket.handshake.headers,
-      query: socket.handshake.query,
-      origin: socket.handshake.headers.origin
-    })
-    
-    // Handle connection errors
-    socket.on('error', (error) => {
-      console.error('🔌 Socket error:', error)
-    })
+    console.log('🔌 New client connected:', socket.id)
 
     // Join store-specific room
     socket.on('join-store', (data) => {
