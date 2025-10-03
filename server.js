@@ -4,7 +4,7 @@ const next = require('next')
 const { Server } = require('socket.io')
 
 const dev = process.env.NODE_ENV !== 'production'
-const hostname = process.env.HOSTNAME || (dev ? 'localhost' : '0.0.0.0')
+const hostname = 'localhost'
 const port = process.env.PORT || 3000
 
 const app = next({ dev, hostname, port })
@@ -25,15 +25,9 @@ app.prepare().then(() => {
   // Initialize Socket.IO
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.NODE_ENV === 'production' 
-        ? process.env.ALLOWED_ORIGINS?.split(',') || false
-        : "*",
-      methods: ["GET", "POST"],
-      credentials: true
-    },
-    maxHttpBufferSize: 1e6, // 1MB
-    pingTimeout: 60000,
-    pingInterval: 25000
+      origin: "*",
+      methods: ["GET", "POST"]
+    }
   })
 
   // Make io globally available for API routes
@@ -134,9 +128,7 @@ app.prepare().then(() => {
       console.error(err)
       process.exit(1)
     })
-    .listen(port, hostname, () => {
+    .listen(port, () => {
       console.log(`> Ready on http://${hostname}:${port}`)
-      console.log(`> Environment: ${process.env.NODE_ENV || 'development'}`)
-      console.log(`> CORS Origins: ${process.env.NODE_ENV === 'production' ? process.env.ALLOWED_ORIGINS || 'none' : '*'}`)
     })
 })
