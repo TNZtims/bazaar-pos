@@ -700,6 +700,14 @@ export default function UsersPage() {
           />
         )}
       </div>
+
+      {/* Loading Overlay */}
+      <LoadingOverlay
+        isVisible={loading}
+        title="Loading Users"
+        message="Fetching customer accounts and user data..."
+        color="purple"
+      />
     </Layout>
   )
 }
@@ -913,14 +921,6 @@ function BulkImportModal({ onClose, onSuccess }: { onClose: () => void; onSucces
           </div>
         </div>
       </div>
-
-      {/* Loading Overlay */}
-      <LoadingOverlay
-        isVisible={loading}
-        title="Loading Users"
-        message="Fetching customer accounts and user data..."
-        color="purple"
-      />
     </div>
   )
 }
