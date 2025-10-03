@@ -169,6 +169,12 @@ export function useWebSocketInventory({
 
     newSocket.on('connect_error', (err) => {
       console.error('❌ WebSocket connection error:', err)
+      console.error('❌ Error details:', {
+        message: err.message,
+        description: err.description,
+        context: err.context,
+        type: err.type
+      })
       setIsConnected(false)
       setConnectionQuality('disconnected')
       setReconnectAttempts(prev => prev + 1)
@@ -180,6 +186,12 @@ export function useWebSocketInventory({
         setError('Connection unstable, retrying...')
       } else {
         setError('Real-time updates temporarily unavailable')
+      }
+      
+      // Don't retry if it's a server connection issue
+      if (err.message?.includes('xhr poll error') || err.message?.includes('websocket error') || err.message?.includes('400')) {
+        console.log('🚫 WebSocket server appears to be unavailable, disabling reconnection')
+        newSocket.disconnect()
       }
     })
 

@@ -13,6 +13,17 @@ const handle = app.getRequestHandler()
 app.prepare().then(() => {
   const httpServer = createServer(async (req, res) => {
     try {
+      // Add Socket.IO health check endpoint
+      if (req.url === '/socket.io-health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ 
+          status: 'ok', 
+          socketio: 'running',
+          timestamp: new Date().toISOString()
+        }))
+        return
+      }
+      
       const parsedUrl = parse(req.url, true)
       await handle(req, res, parsedUrl)
     } catch (err) {
@@ -22,17 +33,28 @@ app.prepare().then(() => {
     }
   })
 
-  // Initialize Socket.IO
+  // Initialize Socket.IO with more permissive settings for production
   const io = new Server(httpServer, {
     cors: {
-      origin: dev ? "*" : ["https://bzpos.outdoorequippedservice.com"],
-      methods: ["GET", "POST"],
-      credentials: true
+      origin: dev ? "*" : ["https://bzpos.outdoorequippedservice.com", "https://www.bzpos.outdoorequippedservice.com"],
+      methods: ["GET", "POST", "OPTIONS"],
+      credentials: true,
+      allowedHeaders: ["*"]
     },
     transports: ['polling', 'websocket'],
     allowEIO3: true,
     pingTimeout: 60000,
-    pingInterval: 25000
+    pingInterval: 25000,
+    connectTimeout: 45000,
+    upgradeTimeout: 10000
+  })
+
+  // Add debugging for Socket.IO server
+  console.log('🔌 Socket.IO server initialized with config:', {
+    cors: io.engine.opts.cors,
+    transports: io.engine.opts.transports,
+    pingTimeout: io.engine.opts.pingTimeout,
+    pingInterval: io.engine.opts.pingInterval
   })
 
   // Make io globally available for API routes
@@ -70,8 +92,18 @@ app.prepare().then(() => {
     console.log(`📊 Store ${storeId}: ${users.length} users online`, users.map(u => u.name))
   }
 
+  // Add connection debugging
+  io.engine.on('connection_error', (err) => {
+    console.error('🔌 Socket.IO engine connection error:', err)
+  })
+
   io.on('connection', (socket) => {
     console.log('🔌 New client connected:', socket.id, 'from:', socket.handshake.address)
+    console.log('🔌 Handshake details:', {
+      headers: socket.handshake.headers,
+      query: socket.handshake.query,
+      origin: socket.handshake.headers.origin
+    })
     
     // Handle connection errors
     socket.on('error', (error) => {
