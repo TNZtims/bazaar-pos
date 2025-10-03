@@ -105,18 +105,17 @@ export function useWebSocketInventory({
     
     try {
       newSocket = io(wsUrl, {
-        transports: ['polling', 'websocket'],
+        transports: ['polling'], // Start with polling only for Railway compatibility
         timeout: 20000,
         reconnection: true,
-        reconnectionDelay: getReconnectDelay(reconnectAttempts),
-        reconnectionDelayMax: 30000,
-        reconnectionAttempts: 5,
-        maxReconnectionAttempts: 5,
+        reconnectionDelay: 3000,
+        reconnectionAttempts: 3,
+        maxReconnectionAttempts: 3,
         randomizationFactor: 0.5,
-        forceNew: false,
-        upgrade: true,
-        rememberUpgrade: true,
-        withCredentials: true
+        forceNew: true, // Force new connection for Railway
+        upgrade: false, // Disable upgrade for Railway
+        rememberUpgrade: false,
+        withCredentials: false // Railway doesn't support credentials
       })
     } catch (err) {
       console.error('Failed to initialize WebSocket:', err)

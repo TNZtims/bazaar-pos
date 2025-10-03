@@ -4,8 +4,17 @@ const next = require('next')
 const { Server } = require('socket.io')
 
 const dev = process.env.NODE_ENV !== 'production'
+const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID
 const hostname = dev ? 'localhost' : '0.0.0.0'
 const port = process.env.PORT || 3000
+
+console.log('🚂 Environment:', {
+  dev,
+  isRailway: !!isRailway,
+  hostname,
+  port,
+  nodeEnv: process.env.NODE_ENV
+})
 
 const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
@@ -33,20 +42,22 @@ app.prepare().then(() => {
     }
   })
 
-  // Initialize Socket.IO with more permissive settings for production
+  // Initialize Socket.IO with Railway-optimized settings
   const io = new Server(httpServer, {
     cors: {
       origin: dev ? "*" : ["https://bzpos.outdoorequippedservice.com", "https://www.bzpos.outdoorequippedservice.com"],
       methods: ["GET", "POST", "OPTIONS"],
-      credentials: true,
+      credentials: false, // Railway doesn't support credentials with CORS
       allowedHeaders: ["*"]
     },
-    transports: ['polling', 'websocket'],
+    transports: ['polling'], // Start with polling only for Railway compatibility
     allowEIO3: true,
-    pingTimeout: 60000,
+    pingTimeout: 30000,
     pingInterval: 25000,
-    connectTimeout: 45000,
-    upgradeTimeout: 10000
+    connectTimeout: 20000,
+    upgradeTimeout: 10000,
+    maxHttpBufferSize: 1e6,
+    serveClient: false // Disable client serving in production
   })
 
   // Add debugging for Socket.IO server
@@ -92,9 +103,20 @@ app.prepare().then(() => {
     console.log(`📊 Store ${storeId}: ${users.length} users online`, users.map(u => u.name))
   }
 
-  // Add connection debugging
+  // Add connection debugging with Railway-specific handling
   io.engine.on('connection_error', (err) => {
-    console.error('🔌 Socket.IO engine connection error:', err)
+    console.error('🔌 Socket.IO engine connection error:', {
+      message: err.message,
+      code: err.code,
+      context: err.context,
+      type: err.type,
+      description: err.description
+    })
+    
+    // Railway-specific error handling
+    if (isRailway) {
+      console.log('🚂 Railway detected - using polling-only mode')
+    }
   })
 
   io.on('connection', (socket) => {
@@ -262,6 +284,8 @@ app.prepare().then(() => {
     .listen(port, hostname, () => {
       console.log(`> Ready on http://${hostname}:${port}`)
       console.log(`> Environment: ${dev ? 'development' : 'production'}`)
+      console.log(`> Railway: ${isRailway ? 'Yes' : 'No'}`)
       console.log(`> Socket.IO server initialized with CORS origin: ${dev ? '*' : 'https://bzpos.outdoorequippedservice.com'}`)
+      console.log(`> Socket.IO transports: ${io.engine.opts.transports.join(', ')}`)
     })
 })
