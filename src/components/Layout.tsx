@@ -76,9 +76,9 @@ const Layout = ({ children }: LayoutProps) => {
   // Don't render theme-dependent content until mounted
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-slate-100 animate-pulse">
+      <div className="min-h-screen bg-slate-900 animate-pulse">
         <div className="flex items-center justify-center h-screen">
-          <div className="text-slate-600">Loading...</div>
+          <div className="text-slate-400">Loading...</div>
         </div>
       </div>
     )
@@ -101,10 +101,10 @@ const Layout = ({ children }: LayoutProps) => {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900 transition-all duration-500">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 transition-all duration-500">
       {/* Mobile header - Fixed */}
       <div className="lg:hidden">
-        <div className="backdrop-blur-md bg-white/95 dark:bg-slate-900/95 border-b border-slate-200/50 dark:border-slate-700/50 px-4 py-3 fixed top-0 left-0 right-0 z-50">
+        <div className="backdrop-blur-md bg-slate-900/95 border-b border-slate-700/50 px-4 py-3 fixed top-0 left-0 right-0 z-50">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
@@ -116,7 +116,7 @@ const Layout = ({ children }: LayoutProps) => {
             {/* Dark Mode Only - No Toggle Needed */}
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="p-2 rounded-lg bg-slate-100/50 dark:bg-slate-800/50 border border-slate-300/50 dark:border-slate-600/50 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-colors duration-200 safe-transform"
+                className="p-2 rounded-lg bg-slate-800/50 border border-slate-600/50 hover:bg-slate-700/50 transition-colors duration-200 safe-transform"
               >
                 <span className="sr-only">Open sidebar</span>
                 {sidebarOpen ? '✕' : '☰'}
@@ -135,9 +135,9 @@ const Layout = ({ children }: LayoutProps) => {
           ${sidebarOpen ? 'block' : 'hidden'} lg:block
           fixed lg:sticky top-16 lg:top-0 inset-y-0 left-0 z-40 lg:z-0 h-[calc(100vh-4rem)] lg:h-screen w-72
         `}>
-          <div className="h-full lg:h-screen backdrop-blur-md bg-white/95 dark:bg-slate-900/95 border-r border-slate-200/50 dark:border-slate-700/50 shadow-lg lg:shadow-none flex flex-col">
+          <div className="h-full lg:h-screen backdrop-blur-md bg-slate-900/95 border-r border-slate-700/50 shadow-lg lg:shadow-none flex flex-col">
             {/* Logo */}
-            <div className="hidden lg:flex items-center justify-between px-6 py-6 border-b border-slate-200/50 dark:border-slate-700/50">
+            <div className="hidden lg:flex items-center justify-between px-6 py-6 border-b border-slate-700/50">
               <div className="flex items-center space-x-3">
                 {store?.logoImageUrl ? (
                   <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg flex-shrink-0">
@@ -167,7 +167,7 @@ const Layout = ({ children }: LayoutProps) => {
                 )}
                 <div>
                   <h1 className="text-xl font-bold gradient-text">BzPOS</h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{store?.storeName || 'Point of Sale'}</p>
+                  <p className="text-xs text-slate-400">{store?.storeName || 'Point of Sale'}</p>
                 </div>
               </div>
               {/* Dark Mode Only - No Toggle Needed */}
@@ -188,7 +188,7 @@ const Layout = ({ children }: LayoutProps) => {
                         transition-colors duration-200 ease-in-out
                         ${isActive
                           ? `bg-gradient-to-r ${item.gradient} text-white shadow-lg transform scale-105`
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100/50 dark:hover:bg-slate-800/50'
+                          : 'text-slate-300 hover:bg-slate-800/50'
                         }
                       `}
                       style={{ animationDelay: `${index * 100}ms` }}
@@ -197,7 +197,7 @@ const Layout = ({ children }: LayoutProps) => {
                         w-10 h-10 rounded-lg flex items-center justify-center mr-3 transition-colors duration-200 safe-transform
                         ${isActive 
                           ? 'bg-white/20 backdrop-blur-sm' 
-                          : 'bg-slate-100/30 dark:bg-slate-700/30 group-hover:bg-slate-200/40 dark:group-hover:bg-slate-600/40'
+                          : 'bg-slate-700/30 group-hover:bg-slate-600/40'
                         }
                       `}>
                         <span className="text-lg">{item.icon}</span>
@@ -219,14 +219,14 @@ const Layout = ({ children }: LayoutProps) => {
 
             {/* Store info section */}
             <div className="mt-auto p-4">
-              <div className="backdrop-blur-md bg-slate-100/50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-300/30 dark:border-slate-600/30">
+              <div className="backdrop-blur-md bg-slate-800/50 rounded-xl p-4 border border-slate-600/30">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
                     <span className="text-white font-semibold text-sm">{store?.storeName?.charAt(0).toUpperCase() || 'S'}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{store?.storeName || 'Store'}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">Admin: {store?.isAdmin ? 'Yes' : 'No'}</p>
+                    <p className="text-sm font-medium text-slate-200 truncate">{store?.storeName || 'Store'}</p>
+                    <p className="text-xs text-slate-400 truncate">Admin: {store?.isAdmin ? 'Yes' : 'No'}</p>
                   </div>
                 </div>
                 
@@ -253,7 +253,7 @@ const Layout = ({ children }: LayoutProps) => {
                   
                   <button
                     onClick={handleLogout}
-                    className="w-full text-xs text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                    className="w-full text-xs text-slate-400 hover:text-red-400 transition-colors"
                   >
                     Sign Out
                   </button>

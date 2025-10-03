@@ -224,7 +224,19 @@ export default function OrdersPage() {
     
     // Import socket.io-client dynamically
     import('socket.io-client').then(({ io }) => {
-      const socket = io()
+      // Get the current host and protocol for WebSocket connection
+      const wsUrl = `${window.location.protocol}//${window.location.host}`
+      console.log('🔌 Orders Page: WebSocket URL:', wsUrl)
+      const socket = io(wsUrl, {
+        transports: ['polling'], // Railway compatibility
+        timeout: 20000,
+        reconnection: true,
+        reconnectionDelay: 3000,
+        reconnectionAttempts: 3,
+        forceNew: true,
+        upgrade: false,
+        withCredentials: false
+      })
       
       // Join store-specific room
       socket.emit('join-store', store.id)
@@ -690,7 +702,7 @@ ${itemsList}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Order Management</h1>
+              <h1 className="text-2xl font-bold text-slate-100">Order Management</h1>
               <WebSocketStatus
                 isConnected={isWebSocketConnected}
                 connectionQuality={connectionQuality}
@@ -698,7 +710,7 @@ ${itemsList}
                 reconnectAttempts={reconnectAttempts}
               />
             </div>
-            <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Manage orders, payments, and modifications</p>
+            <p className="mt-1 text-sm text-slate-400">Manage orders, payments, and modifications</p>
           </div>
           
           {/* Quick Actions */}
@@ -760,7 +772,7 @@ ${itemsList}
 
         {/* Advanced Filters */}
         {showFilters && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl border-2 border-blue-200 dark:border-blue-700/50 p-6 backdrop-blur-sm bg-gradient-to-br from-blue-50/50 to-indigo-50/30 dark:from-slate-800/90 dark:to-slate-700/90 ring-1 ring-blue-100 dark:ring-blue-800/30">
+          <div className="bg-slate-800 rounded-xl shadow-xl border-2 border-blue-200 dark:border-blue-700/50 p-6 backdrop-blur-sm bg-gradient-to-br from-blue-50/50 to-indigo-50/30 dark:from-slate-800/90 dark:to-slate-700/90 ring-1 ring-blue-100 dark:ring-blue-800/30">
             {/* Filter Header */}
             <div className="flex items-center gap-3 mb-6 pb-4 border-b border-blue-200/50 dark:border-blue-700/30">
               <div className="flex items-center justify-center w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg shadow-sm">
@@ -769,8 +781,8 @@ ${itemsList}
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Advanced Filters</h3>
-                <p className="text-sm text-gray-600 dark:text-slate-400">Refine your search with detailed criteria</p>
+                <h3 className="text-lg font-semibold text-slate-100">Advanced Filters</h3>
+                <p className="text-sm text-slate-400">Refine your search with detailed criteria</p>
               </div>
             </div>
             
@@ -778,7 +790,7 @@ ${itemsList}
 
               {/* Customer Name Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-slate-300 mb-1">
                   Customer Name
                 </label>
                 <input
@@ -786,19 +798,19 @@ ${itemsList}
                   value={customerNameFilter}
                   onChange={(e) => setCustomerNameFilter(e.target.value)}
                   placeholder="Enter customer name..."
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               {/* Payment Status Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-slate-300 mb-1">
                   Payment Status
                 </label>
                 <select
                   value={paymentStatusFilter}
                   onChange={(e) => setPaymentStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">All Payment Status</option>
                   <option value="pending">Pending Payment</option>
@@ -810,13 +822,13 @@ ${itemsList}
 
               {/* Product Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-slate-300 mb-1">
                   Product
                 </label>
                 <select
                   value={productFilter}
                   onChange={(e) => setProductFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">All Products</option>
                   {productOptions.map((product) => (
@@ -829,39 +841,39 @@ ${itemsList}
 
               {/* Date From */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-slate-300 mb-1">
                   Date From
                 </label>
                 <input
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               {/* Date To */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-slate-300 mb-1">
                   Date To
                 </label>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               {/* Sort By */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-slate-300 mb-1">
                   Sort By
                 </label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as 'createdAt' | 'finalAmount' | 'customerName')}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="createdAt">Date Created</option>
                   <option value="finalAmount">Order Amount</option>
@@ -871,13 +883,13 @@ ${itemsList}
 
               {/* Sort Order */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-slate-300 mb-1">
                   Sort Order
                 </label>
                 <select
                   value={sortOrder}
                   onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="desc">Newest First</option>
                   <option value="asc">Oldest First</option>
@@ -891,7 +903,7 @@ ${itemsList}
                 <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">Quick Date Filters:</p>
+                <p className="text-sm font-semibold text-slate-300">Quick Date Filters:</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -918,7 +930,7 @@ ${itemsList}
         )}
 
         {/* Modern Search Bar */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-4">
+        <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700 p-4">
           <div className="flex flex-col sm:flex-row gap-4 items-center">
             <div className="flex-1 relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -932,7 +944,7 @@ ${itemsList}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyPress={handleSearchKeyPress}
                 placeholder="Search orders by ID, customer, product, cashier, amount, status, or any field..."
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500 dark:placeholder-slate-400"
+                className="w-full pl-10 pr-4 py-3 border border-slate-600 rounded-lg bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500 dark:placeholder-slate-400"
               />
               {searchInput && (
                 <button
@@ -958,13 +970,13 @@ ${itemsList}
               Search
             </button>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600 dark:text-slate-400">
+              <span className="text-sm text-slate-400">
                 {totalOrders > 0 ? `${startIndex}-${endIndex} of ${totalOrders}` : '0 orders'}
               </span>
               <select
                 value={itemsPerPage}
                 onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               >
                 <option value={5}>5 per page</option>
                 <option value={10}>10 per page</option>
@@ -978,7 +990,7 @@ ${itemsList}
           
           {/* Search Help Text */}
           {searchInput && (
-            <div className="mt-2 text-xs text-gray-500 dark:text-slate-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+            <div className="mt-2 text-xs text-slate-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
               <div className="flex items-start gap-2">
                 <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1004,9 +1016,9 @@ ${itemsList}
         </div>
 
         {/* Orders Table */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+        <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700">
           {orders.length === 0 && !loading ? (
-            <div className="p-8 text-center text-gray-500 dark:text-slate-400">
+            <div className="p-8 text-center text-slate-400">
               No orders found.
             </div>
           ) : (
@@ -1021,10 +1033,10 @@ ${itemsList}
                       </svg>
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
+                      <h3 className="text-lg font-semibold text-slate-100">
                         {totalOrders.toLocaleString()} Orders Found
                       </h3>
-                      <p className="text-sm text-gray-600 dark:text-slate-400">
+                      <p className="text-sm text-slate-400">
                         {totalOrders === 1 ? '1 order' : `${totalOrders.toLocaleString()} orders`} 
                         {searchTerm || customerNameFilter || paymentStatusFilter !== 'all' || dateFrom || dateTo ? ' matching your filters' : ' total'}
                       </p>
@@ -1064,7 +1076,7 @@ ${itemsList}
 
               {/* Desktop Table */}
               <div className="hidden md:block">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
+                <table className="min-w-full divide-y divide-slate-700">
                   <thead className="bg-gray-50 dark:bg-slate-700">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-300 uppercase tracking-wider">
@@ -1093,18 +1105,18 @@ ${itemsList}
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                  <tbody className="bg-slate-800 divide-y divide-slate-700">
                     {orders.map((order) => (
-                      <tr key={order._id} className="hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+                      <tr key={order._id} className="hover:bg-slate-700 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900 dark:text-slate-100">
+                          <div className="text-sm text-slate-100">
                             <div className="font-medium">#{order._id.slice(-6)}</div>
-                            <div className="text-gray-500 dark:text-slate-400">{formatDate(order.createdAt)}</div>
-                            <div className="text-gray-500 dark:text-slate-400">{order.items.length} items</div>
+                            <div className="text-slate-400">{formatDate(order.createdAt)}</div>
+                            <div className="text-slate-400">{order.items.length} items</div>
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900 dark:text-slate-100 max-w-xs">
+                          <div className="text-sm text-slate-100 max-w-xs">
                             {order.items.slice(0, 3).map((item, index) => (
                               <div key={index} className="flex justify-between items-center py-1">
                                 <span className="truncate mr-2" title={item.productName}>
@@ -1116,20 +1128,20 @@ ${itemsList}
                               </div>
                             ))}
                             {order.items.length > 3 && (
-                              <div className="text-gray-500 dark:text-slate-400 text-xs mt-1">
+                              <div className="text-slate-400 text-xs mt-1">
                                 +{order.items.length - 3} more items
                               </div>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">
                           <div>{order.customerName || 'Walk-in Customer'}</div>
                           {order.customerPhone && (
-                            <div className="text-gray-500 dark:text-slate-400 text-xs">{order.customerPhone}</div>
+                            <div className="text-slate-400 text-xs">{order.customerPhone}</div>
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <div className="text-gray-900 dark:text-slate-100 font-medium">
+                          <div className="text-slate-100 font-medium">
                             Total: {formatCurrency(order.finalAmount)}
                           </div>
                           <div className="text-green-600 dark:text-green-400">
@@ -1146,10 +1158,10 @@ ${itemsList}
                             {isOverdue(order) ? 'Overdue' : order.paymentStatus}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">
                           {order.cashier || 'N/A'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">
                           {order.dueDate ? formatDate(order.dueDate) : 'No due date'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -1244,11 +1256,11 @@ ${itemsList}
               {/* Mobile Cards */}
               <div className="md:hidden space-y-4 p-4">
                 {orders.map((order) => (
-                  <div key={order._id} className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-white dark:bg-slate-700">
+                  <div key={order._id} className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-slate-700">
                     <div className="flex justify-between items-start mb-2">
                       <div>
-                        <p className="font-medium text-gray-900 dark:text-slate-100">#{order._id.slice(-6)}</p>
-                        <p className="text-sm text-gray-600 dark:text-slate-400">{formatDate(order.createdAt)}</p>
+                        <p className="font-medium text-slate-100">#{order._id.slice(-6)}</p>
+                        <p className="text-sm text-slate-400">{formatDate(order.createdAt)}</p>
                       </div>
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(isOverdue(order) ? 'overdue' : order.paymentStatus)}`}>
                         {isOverdue(order) ? 'Overdue' : order.paymentStatus}
@@ -1256,15 +1268,15 @@ ${itemsList}
                     </div>
                     
                     <div className="space-y-1 mb-3">
-                      <p className="text-sm text-gray-900 dark:text-slate-100">
+                      <p className="text-sm text-slate-100">
                         Customer: {order.customerName || 'Walk-in Customer'}
                       </p>
-                      <p className="text-sm text-gray-900 dark:text-slate-100">
+                      <p className="text-sm text-slate-100">
                         Cashier: {order.cashier || 'N/A'}
                       </p>
                       
                       {/* Products Preview for Mobile */}
-                      <div className="text-sm text-gray-900 dark:text-slate-100">
+                      <div className="text-sm text-slate-100">
                         <p className="font-medium mb-1">Products:</p>
                         <div className="space-y-1 pl-2">
                           {order.items.slice(0, 2).map((item, index) => (
@@ -1278,14 +1290,14 @@ ${itemsList}
                             </div>
                           ))}
                           {order.items.length > 2 && (
-                            <div className="text-gray-500 dark:text-slate-400 text-xs">
+                            <div className="text-slate-400 text-xs">
                               +{order.items.length - 2} more items
                             </div>
                           )}
                         </div>
                       </div>
                       
-                      <p className="text-sm text-gray-900 dark:text-slate-100">
+                      <p className="text-sm text-slate-100">
                         Total: {formatCurrency(order.finalAmount)}
                       </p>
                       <p className="text-sm text-green-600 dark:text-green-400">
@@ -1372,9 +1384,9 @@ ${itemsList}
 
         {/* Modern Pagination */}
         {totalOrders > 0 && (
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 px-6 py-4">
+          <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700 px-6 py-4">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-              <div className="text-sm text-gray-700 dark:text-slate-300">
+              <div className="text-sm text-slate-300">
                 Showing <span className="font-medium">{startIndex}</span> to <span className="font-medium">{endIndex}</span> of{' '}
                 <span className="font-medium">{totalOrders}</span> orders
               </div>
@@ -1384,7 +1396,7 @@ ${itemsList}
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-slate-400 bg-slate-700 border border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -1413,7 +1425,7 @@ ${itemsList}
                         className={`relative inline-flex items-center px-3 py-2 text-sm font-medium border rounded-md transition-colors ${
                           currentPage === pageNum
                             ? 'bg-blue-600 text-white border-blue-600'
-                            : 'text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+                            : 'text-slate-400 bg-slate-700 border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
                         }`}
                       >
                         {pageNum}
@@ -1423,10 +1435,10 @@ ${itemsList}
                   
                   {totalPages > 5 && currentPage < totalPages - 2 && (
                     <>
-                      <span className="text-gray-500 dark:text-slate-400 px-2">...</span>
+                      <span className="text-slate-400 px-2">...</span>
                       <button
                         onClick={() => handlePageChange(totalPages)}
-                        className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
+                        className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-slate-400 bg-slate-700 border border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
                       >
                         {totalPages}
                       </button>
@@ -1438,7 +1450,7 @@ ${itemsList}
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-slate-400 bg-slate-700 border border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Next
                   <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1456,7 +1468,7 @@ ${itemsList}
             <div className="backdrop-blur-md bg-white/95 dark:bg-slate-900/95 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200/50 dark:border-slate-700/50 mx-4">
               <div className="p-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Order Details</h3>
+                  <h3 className="text-lg font-semibold text-slate-100">Order Details</h3>
                   <button
                     onClick={() => setSelectedOrder(null)}
                     className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer"
@@ -1472,19 +1484,19 @@ ${itemsList}
                   {/* Order Info */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Order ID</label>
-                      <p className="text-sm text-gray-900 dark:text-slate-100 font-mono">#{selectedOrder._id.slice(-8)}</p>
+                      <label className="block text-sm font-medium text-slate-300">Order ID</label>
+                      <p className="text-sm text-slate-100 font-mono">#{selectedOrder._id.slice(-8)}</p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Date Created</label>
-                      <p className="text-sm text-gray-900 dark:text-slate-100">{formatDate(selectedOrder.createdAt)}</p>
+                      <label className="block text-sm font-medium text-slate-300">Date Created</label>
+                      <p className="text-sm text-slate-100">{formatDate(selectedOrder.createdAt)}</p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Customer</label>
-                      <p className="text-sm text-gray-900 dark:text-slate-100">{selectedOrder.customerName || 'Walk-in Customer'}</p>
+                      <label className="block text-sm font-medium text-slate-300">Customer</label>
+                      <p className="text-sm text-slate-100">{selectedOrder.customerName || 'Walk-in Customer'}</p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Status</label>
+                      <label className="block text-sm font-medium text-slate-300">Status</label>
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(isOverdue(selectedOrder) ? 'overdue' : selectedOrder.paymentStatus)}`}>
                         {isOverdue(selectedOrder) ? 'Overdue' : selectedOrder.paymentStatus}
                       </span>
@@ -1493,7 +1505,7 @@ ${itemsList}
 
                   {/* Items */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Items</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Items</label>
                     <div className="border border-gray-200 dark:border-slate-600 rounded-lg overflow-hidden">
                       <table className="min-w-full">
                         <thead className="bg-gray-50 dark:bg-slate-700">
@@ -1504,13 +1516,13 @@ ${itemsList}
                             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-slate-300">Total</th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                        <tbody className="bg-slate-800 divide-y divide-slate-700">
                           {selectedOrder.items.map((item, index) => (
                             <tr key={index}>
-                              <td className="px-4 py-2 text-sm text-gray-900 dark:text-slate-100">{item.productName}</td>
-                              <td className="px-4 py-2 text-sm text-gray-900 dark:text-slate-100">{item.quantity}</td>
-                              <td className="px-4 py-2 text-sm text-gray-900 dark:text-slate-100">{formatCurrency(item.unitPrice)}</td>
-                              <td className="px-4 py-2 text-sm text-gray-900 dark:text-slate-100">{formatCurrency(item.totalPrice)}</td>
+                              <td className="px-4 py-2 text-sm text-slate-100">{item.productName}</td>
+                              <td className="px-4 py-2 text-sm text-slate-100">{item.quantity}</td>
+                              <td className="px-4 py-2 text-sm text-slate-100">{formatCurrency(item.unitPrice)}</td>
+                              <td className="px-4 py-2 text-sm text-slate-100">{formatCurrency(item.totalPrice)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1521,19 +1533,19 @@ ${itemsList}
                   {/* Payment History */}
                   {selectedOrder.payments.length > 0 && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Payment History</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Payment History</label>
                       <div className="space-y-2">
                         {selectedOrder.payments.map((payment, index) => (
                           <div key={index} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-slate-700 rounded-lg">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                              <div className="text-sm font-medium text-slate-100">
                                 {formatCurrency(payment.amount)} - {payment.method}
                               </div>
-                              <div className="text-xs text-gray-500 dark:text-slate-400">
+                              <div className="text-xs text-slate-400">
                                 {formatDate(payment.date)}
                               </div>
                               {payment.notes && (
-                                <div className="text-xs text-gray-600 dark:text-slate-400">{payment.notes}</div>
+                                <div className="text-xs text-slate-400">{payment.notes}</div>
                               )}
                             </div>
                           </div>
@@ -1544,19 +1556,19 @@ ${itemsList}
 
                   {/* Financial Summary */}
                   <div className="border-t border-gray-200 dark:border-slate-600 pt-4 space-y-2">
-                    <div className="flex justify-between text-sm text-gray-900 dark:text-slate-100">
+                    <div className="flex justify-between text-sm text-slate-100">
                       <span>Subtotal:</span>
                       <span>{formatCurrency(selectedOrder.subtotal)}</span>
                     </div>
-                    <div className="flex justify-between text-sm text-gray-900 dark:text-slate-100">
+                    <div className="flex justify-between text-sm text-slate-100">
                       <span>Tax:</span>
                       <span>{formatCurrency(selectedOrder.tax)}</span>
                     </div>
-                    <div className="flex justify-between text-sm text-gray-900 dark:text-slate-100">
+                    <div className="flex justify-between text-sm text-slate-100">
                       <span>Discount:</span>
                       <span>-{formatCurrency(selectedOrder.discount)}</span>
                     </div>
-                    <div className="flex justify-between text-lg font-semibold border-t border-gray-200 dark:border-slate-600 pt-2 text-gray-900 dark:text-slate-100">
+                    <div className="flex justify-between text-lg font-semibold border-t border-gray-200 dark:border-slate-600 pt-2 text-slate-100">
                       <span>Total:</span>
                       <span>{formatCurrency(selectedOrder.finalAmount)}</span>
                     </div>
@@ -1584,7 +1596,7 @@ ${itemsList}
                   )}
                   <button
                     onClick={() => setSelectedOrder(null)}
-                    className="px-4 py-2 bg-gray-300 dark:bg-slate-600 text-gray-700 dark:text-slate-300 rounded-md hover:bg-gray-400 dark:hover:bg-slate-500 cursor-pointer"
+                    className="px-4 py-2 bg-gray-300 dark:bg-slate-600 text-slate-300 rounded-md hover:bg-gray-400 dark:hover:bg-slate-500 cursor-pointer"
                   >
                     Close
                   </button>
@@ -1600,7 +1612,7 @@ ${itemsList}
             <div className="backdrop-blur-md bg-white/95 dark:bg-slate-900/95 rounded-xl shadow-2xl max-w-md w-full border border-slate-200/50 dark:border-slate-700/50 mx-4">
               <div className="p-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Add Payment</h3>
+                  <h3 className="text-lg font-semibold text-slate-100">Add Payment</h3>
                   <button
                     onClick={() => {
                       setPaymentModal(false)
@@ -1662,7 +1674,7 @@ ${itemsList}
                       <h4 className="font-medium text-slate-100 mb-3">Add New Payment</h4>
                       <div className="space-y-3">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                          <label className="block text-sm font-medium text-slate-300 mb-1">
                             Payment Amount (₱)
                           </label>
                           <input
@@ -1672,9 +1684,9 @@ ${itemsList}
                             max={selectedOrder.amountDue}
                             value={paymentData.amount}
                             onChange={(e) => setPaymentData({ ...paymentData, amount: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
-                          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                          <p className="text-xs text-slate-400 mt-1">
                             Maximum: {formatCurrency(selectedOrder.amountDue)}
                           </p>
                         </div>
@@ -1732,13 +1744,13 @@ ${itemsList}
 
                   {selectedOrder.amountDue > 0 && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
                         Payment Method
                       </label>
                       <select
                         value={paymentData.method}
                         onChange={(e) => setPaymentData({ ...paymentData, method: e.target.value as 'cash' | 'card' | 'digital' })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                       >
                         <option value="cash">Cash</option>
                         <option value="card">Card</option>
@@ -1749,16 +1761,16 @@ ${itemsList}
 
                   {selectedOrder.amountDue > 0 && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
                         Cashier
                       </label>
-                      <div className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-gray-50 dark:bg-slate-600 text-gray-900 dark:text-slate-100">
+                      <div className="w-full px-3 py-2 border border-slate-600 rounded-md bg-gray-50 dark:bg-slate-600 text-slate-100">
                         <div className="flex items-center gap-2">
                           <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                           </svg>
                           <span className="font-medium">{store?.selectedCashier || 'Unknown Cashier'}</span>
-                          <span className="text-xs text-gray-500 dark:text-slate-400">(Logged in)</span>
+                          <span className="text-xs text-slate-400">(Logged in)</span>
                         </div>
                       </div>
                     </div>
@@ -1766,14 +1778,14 @@ ${itemsList}
 
                   {selectedOrder.amountDue > 0 && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
                         Notes (Optional)
                       </label>
                       <textarea
                         value={paymentData.notes}
                         onChange={(e) => setPaymentData({ ...paymentData, notes: e.target.value })}
                         rows={2}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Optional payment notes..."
                       />
                     </div>
@@ -1784,7 +1796,7 @@ ${itemsList}
                 <div className="mt-6 flex justify-end space-x-3">
                   <button
                     onClick={() => setPaymentModal(false)}
-                    className="px-4 py-2 bg-gray-300 dark:bg-slate-600 text-gray-700 dark:text-slate-300 rounded-md hover:bg-gray-400 dark:hover:bg-slate-500 cursor-pointer"
+                    className="px-4 py-2 bg-gray-300 dark:bg-slate-600 text-slate-300 rounded-md hover:bg-gray-400 dark:hover:bg-slate-500 cursor-pointer"
                   >
                     Cancel
                   </button>
