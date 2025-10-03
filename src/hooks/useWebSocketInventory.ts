@@ -105,15 +105,16 @@ export function useWebSocketInventory({
     
     try {
       newSocket = io(wsUrl, {
-        transports: ['polling'],
+        transports: ['websocket', 'polling'],
         timeout: 30000,
         reconnection: true,
         reconnectionDelay: 5000,
-        reconnectionAttempts: 3,
+        reconnectionAttempts: 5,
         forceNew: true,
-        upgrade: false,
+        upgrade: true,
         withCredentials: false,
-        autoConnect: true
+        autoConnect: true,
+        rememberUpgrade: true
       })
     } catch (err) {
       console.error('Failed to initialize WebSocket:', err)
@@ -185,8 +186,14 @@ export function useWebSocketInventory({
         setError('Real-time updates temporarily unavailable')
       }
       
-      // Don't retry if it's a server connection issue
-      if (err.message?.includes('xhr poll error') || err.message?.includes('websocket error') || err.message?.includes('400')) {
+      // Handle specific error types
+      if (err.message?.includes('xhr post error') || 
+          err.message?.includes('400') || 
+          err.description === 400 ||
+          err.type === 'TransportError') {
+        console.log('🚫 WebSocket transport error detected, will retry with different transport')
+        // Don't disconnect immediately, let Socket.IO handle transport fallback
+      } else if (err.message?.includes('websocket error') || err.message?.includes('server error')) {
         console.log('🚫 WebSocket server appears to be unavailable, disabling reconnection')
         newSocket.disconnect()
       }

@@ -218,11 +218,15 @@ export default function ProductsPage() {
       
       const socket = io(wsUrl, {
         transports: ['websocket', 'polling'],
-        timeout: 5000,
+        timeout: 30000,
         reconnection: true,
-        reconnectionDelay: 2000,
+        reconnectionDelay: 5000,
         reconnectionAttempts: 5,
-        forceNew: true
+        forceNew: true,
+        upgrade: true,
+        withCredentials: false,
+        autoConnect: true,
+        rememberUpgrade: true
       })
       
       socket.on('connect', () => {
@@ -234,6 +238,22 @@ export default function ProductsPage() {
       
       socket.on('connect_error', (err) => {
         console.error('🔌 Products Page: WebSocket connection error:', err)
+        console.error('🔌 Products Page: Error details:', {
+          message: err.message,
+          description: err.description,
+          context: err.context,
+          type: err.type
+        })
+        
+        // Handle specific error types
+        if (err.message?.includes('xhr post error') || 
+            err.message?.includes('400') || 
+            err.description === 400 ||
+            err.type === 'TransportError') {
+          console.log('🔌 Products Page: WebSocket transport error detected, will retry with different transport')
+        } else if (err.message?.includes('websocket error') || err.message?.includes('server error')) {
+          console.log('🔌 Products Page: WebSocket server appears to be unavailable')
+        }
       })
       
       socket.on('disconnect', () => {

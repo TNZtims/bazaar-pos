@@ -25,9 +25,16 @@ app.prepare().then(() => {
   // Initialize Socket.IO
   const io = new Server(httpServer, {
     cors: {
-      origin: "*",
-      methods: ["GET", "POST"]
-    }
+      origin: process.env.NODE_ENV === 'production' 
+        ? ["https://bzpos.outdoorequippedservice.com", "https://www.bzpos.outdoorequippedservice.com"]
+        : ["http://localhost:3000", "http://127.0.0.1:3000"],
+      methods: ["GET", "POST"],
+      credentials: true
+    },
+    transports: ['websocket', 'polling'],
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
   })
 
   // Make io globally available for API routes
@@ -100,6 +107,15 @@ app.prepare().then(() => {
         isActive,
         timestamp: new Date().toISOString()
       })
+    })
+
+    // Handle ping/pong for connection monitoring
+    socket.on('ping', (pingTime) => {
+      socket.emit('pong', pingTime)
+    })
+
+    socket.on('pong', () => {
+      // Client responded to server ping
     })
 
     socket.on('disconnect', () => {

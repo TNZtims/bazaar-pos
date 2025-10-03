@@ -224,10 +224,53 @@ export default function OrdersPage() {
     
     // Import socket.io-client dynamically
     import('socket.io-client').then(({ io }) => {
-      const socket = io()
+      // Get the current host and protocol for WebSocket connection
+      const wsUrl = `${window.location.protocol}//${window.location.host}`
       
-      // Join store-specific room
-      socket.emit('join-store', store.id)
+      console.log('📋 Orders Page: WebSocket URL:', wsUrl)
+      
+      const socket = io(wsUrl, {
+        transports: ['websocket', 'polling'],
+        timeout: 30000,
+        reconnection: true,
+        reconnectionDelay: 5000,
+        reconnectionAttempts: 5,
+        forceNew: true,
+        upgrade: true,
+        withCredentials: false,
+        autoConnect: true,
+        rememberUpgrade: true
+      })
+      
+      socket.on('connect', () => {
+        console.log('📋 Orders Page: WebSocket connected')
+        // Join store-specific room
+        socket.emit('join-store', store.id)
+      })
+      
+      socket.on('connect_error', (err) => {
+        console.error('📋 Orders Page: WebSocket connection error:', err)
+        console.error('📋 Orders Page: Error details:', {
+          message: err.message,
+          description: err.description,
+          context: err.context,
+          type: err.type
+        })
+        
+        // Handle specific error types
+        if (err.message?.includes('xhr post error') || 
+            err.message?.includes('400') || 
+            err.description === 400 ||
+            err.type === 'TransportError') {
+          console.log('📋 Orders Page: WebSocket transport error detected, will retry with different transport')
+        } else if (err.message?.includes('websocket error') || err.message?.includes('server error')) {
+          console.log('📋 Orders Page: WebSocket server appears to be unavailable')
+        }
+      })
+      
+      socket.on('disconnect', () => {
+        console.log('📋 Orders Page: WebSocket disconnected')
+      })
       
       // Listen for new orders
       socket.on('order-created', (data: { customerName: string; totalAmount: number; itemCount: number }) => {
