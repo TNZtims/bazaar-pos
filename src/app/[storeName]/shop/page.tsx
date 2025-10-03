@@ -126,7 +126,15 @@ export default function PublicShopPage() {
       // Get the current host and protocol for WebSocket connection
       const wsUrl = `${window.location.protocol}//${window.location.host}`
       console.log('🔌 Shop Page: WebSocket URL:', wsUrl)
-      socket = io(wsUrl)
+      socket = io(wsUrl, {
+        transports: ['polling', 'websocket'],
+        timeout: 20000,
+        reconnection: true,
+        reconnectionDelay: 2000,
+        reconnectionAttempts: 5,
+        forceNew: false,
+        withCredentials: true
+      })
       
       socket.on('connect', () => {
         console.log('Connected to Socket.IO for online users tracking')

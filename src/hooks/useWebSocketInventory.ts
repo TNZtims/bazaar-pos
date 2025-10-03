@@ -105,17 +105,18 @@ export function useWebSocketInventory({
     
     try {
       newSocket = io(wsUrl, {
-        transports: ['websocket', 'polling'],
-        timeout: 15000, // Increased timeout
+        transports: ['polling', 'websocket'],
+        timeout: 20000,
         reconnection: true,
         reconnectionDelay: getReconnectDelay(reconnectAttempts),
         reconnectionDelayMax: 30000,
-        reconnectionAttempts: Infinity, // Never give up
-        maxReconnectionAttempts: Infinity,
+        reconnectionAttempts: 5,
+        maxReconnectionAttempts: 5,
         randomizationFactor: 0.5,
-        forceNew: false, // Allow connection reuse
+        forceNew: false,
         upgrade: true,
-        rememberUpgrade: true
+        rememberUpgrade: true,
+        withCredentials: true
       })
     } catch (err) {
       console.error('Failed to initialize WebSocket:', err)

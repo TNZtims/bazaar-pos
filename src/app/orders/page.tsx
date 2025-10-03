@@ -224,7 +224,18 @@ export default function OrdersPage() {
     
     // Import socket.io-client dynamically
     import('socket.io-client').then(({ io }) => {
-      const socket = io()
+      // Get the current host and protocol for WebSocket connection
+      const wsUrl = `${window.location.protocol}//${window.location.host}`
+      console.log('🔌 Orders Page: WebSocket URL:', wsUrl)
+      const socket = io(wsUrl, {
+        transports: ['polling', 'websocket'],
+        timeout: 20000,
+        reconnection: true,
+        reconnectionDelay: 2000,
+        reconnectionAttempts: 5,
+        forceNew: false,
+        withCredentials: true
+      })
       
       // Join store-specific room
       socket.emit('join-store', store.id)

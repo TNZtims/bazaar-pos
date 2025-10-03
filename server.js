@@ -29,8 +29,10 @@ app.prepare().then(() => {
       methods: ["GET", "POST"],
       credentials: true
     },
-    transports: ['websocket', 'polling'],
-    allowEIO3: true
+    transports: ['polling', 'websocket'],
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
   })
 
   // Make io globally available for API routes
@@ -69,7 +71,12 @@ app.prepare().then(() => {
   }
 
   io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id)
+    console.log('🔌 New client connected:', socket.id, 'from:', socket.handshake.address)
+    
+    // Handle connection errors
+    socket.on('error', (error) => {
+      console.error('🔌 Socket error:', error)
+    })
 
     // Join store-specific room
     socket.on('join-store', (data) => {

@@ -217,12 +217,13 @@ export default function ProductsPage() {
       console.log('🔌 Products Page: WebSocket URL:', wsUrl)
       
       const socket = io(wsUrl, {
-        transports: ['websocket', 'polling'],
-        timeout: 5000,
+        transports: ['polling', 'websocket'],
+        timeout: 20000,
         reconnection: true,
         reconnectionDelay: 2000,
         reconnectionAttempts: 5,
-        forceNew: true
+        forceNew: false,
+        withCredentials: true
       })
       
       socket.on('connect', () => {
