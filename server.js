@@ -20,10 +20,55 @@ const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
 
 app.prepare().then(() => {
-  const httpServer = createServer(async (req, res) => {
+  // Create HTTP server without request handler first
+  const httpServer = createServer()
+
+  // Initialize Socket.IO FIRST - this is critical!
+  const io = new Server(httpServer, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST", "OPTIONS"],
+      credentials: false
+    },
+    transports: ['polling'],
+    allowEIO3: true,
+    pingTimeout: 20000,
+    pingInterval: 25000
+  })
+
+  console.log('🔌 Socket.IO server initialized')
+
+  // Add Socket.IO debugging
+  io.engine.on('connection_error', (err) => {
+    console.error('🔌 Socket.IO connection error:', err.message, err.description)
+  })
+
+  // Add error handling to prevent uncaught exceptions
+  process.on('uncaughtException', (err) => {
+    console.error('🚨 Uncaught Exception:', err.message)
+    if (err.code === 'ERR_HTTP_HEADERS_SENT') {
+      console.error('🚨 Headers already sent - ignoring duplicate response')
+      return // Don't exit process for this error
+    }
+    console.error('🚨 Fatal error, exiting process')
+    process.exit(1)
+  })
+
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('🚨 Unhandled Rejection at:', promise, 'reason:', reason)
+  })
+
+  // NOW add the request handler for non-Socket.IO requests
+  httpServer.on('request', async (req, res) => {
     try {
-      // Debug all requests
-      console.log('📥 Request:', req.method, req.url, req.headers.origin)
+      // Skip Socket.IO requests - they should be handled by Socket.IO server
+      if (req.url && req.url.startsWith('/socket.io/')) {
+        console.log('🔌 Socket.IO request intercepted:', req.method, req.url)
+        return // Let Socket.IO handle this request - don't send any response
+      }
+      
+      // Debug non-Socket.IO requests
+      console.log('📥 Non-Socket.IO Request:', req.method, req.url, req.headers.origin)
       
       // Add Socket.IO health check endpoint
       if (req.url === '/socket.io-health') {
@@ -31,8 +76,35 @@ app.prepare().then(() => {
         res.end(JSON.stringify({ 
           status: 'ok', 
           socketio: 'running',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          connectedClients: io.engine.clientsCount
         }))
+        return
+      }
+      
+      // Add Socket.IO test endpoint
+      if (req.url === '/socket.io-test') {
+        res.writeHead(200, { 'Content-Type': 'text/html' })
+        res.end(`
+          <html>
+            <head><title>Socket.IO Test</title></head>
+            <body>
+              <h1>Socket.IO Test</h1>
+              <p>Socket.IO server is running</p>
+              <p>Connected clients: ${io.engine.clientsCount}</p>
+              <script src="/socket.io/socket.io.js"></script>
+              <script>
+                const socket = io();
+                socket.on('connect', () => {
+                  document.body.innerHTML += '<p style="color: green;">✅ Connected to Socket.IO!</p>';
+                });
+                socket.on('connect_error', (err) => {
+                  document.body.innerHTML += '<p style="color: red;">❌ Connection failed: ' + err.message + '</p>';
+                });
+              </script>
+            </body>
+          </html>
+        `)
         return
       }
       
@@ -40,23 +112,13 @@ app.prepare().then(() => {
       await handle(req, res, parsedUrl)
     } catch (err) {
       console.error('Error occurred handling', req.url, err)
-      res.statusCode = 500
-      res.end('internal server error')
+      // Only send error response if headers haven't been sent
+      if (!res.headersSent) {
+        res.statusCode = 500
+        res.end('internal server error')
+      }
     }
   })
-
-  // Initialize Socket.IO with minimal configuration for Railway
-  const io = new Server(httpServer, {
-    cors: {
-      origin: "*", // Allow all origins for now to test
-      methods: ["GET", "POST"],
-      credentials: false
-    },
-    transports: ['polling'],
-    allowEIO3: true
-  })
-
-  console.log('🔌 Socket.IO server initialized')
 
   // Make io globally available for API routes
   global.io = io
@@ -95,6 +157,10 @@ app.prepare().then(() => {
 
   io.on('connection', (socket) => {
     console.log('🔌 New client connected:', socket.id)
+    console.log('🔌 Client handshake:', {
+      origin: socket.handshake.headers.origin,
+      userAgent: socket.handshake.headers['user-agent']
+    })
 
     // Join store-specific room
     socket.on('join-store', (data) => {
@@ -249,7 +315,9 @@ app.prepare().then(() => {
       console.log(`> Ready on http://${hostname}:${port}`)
       console.log(`> Environment: ${dev ? 'development' : 'production'}`)
       console.log(`> Railway: ${isRailway ? 'Yes' : 'No'}`)
-      console.log(`> Socket.IO server initialized with CORS origin: ${dev ? '*' : 'https://bzpos.outdoorequippedservice.com'}`)
+      console.log(`> Socket.IO server running on port ${port}`)
       console.log(`> Socket.IO transports: ${io.engine.opts.transports.join(', ')}`)
+      console.log(`> Socket.IO CORS origin: ${io.engine.opts.cors.origin}`)
+      console.log(`> Test Socket.IO at: http://${hostname}:${port}/socket.io/`)
     })
 })
