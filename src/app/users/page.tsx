@@ -535,7 +535,7 @@ export default function UsersPage() {
                         setItemsPerPage(Number(e.target.value))
                         setCurrentPage(1)
                       }}
-                      className="text-sm border border-slate-300 dark:border-slate-600 rounded-md px-3 py-1 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                      className="text-sm border border-slate-300 dark:border-slate-600 rounded-md px-3 py-1 bg-slate-800 text-slate-900 dark:text-slate-100"
                     >
                       <option value={5}>5</option>
                       <option value={10}>10</option>
@@ -549,7 +549,7 @@ export default function UsersPage() {
                     <button
                       onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="px-2 sm:px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-2 sm:px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <span className="hidden sm:inline">Previous</span>
                       <span className="sm:hidden">‹</span>
@@ -587,7 +587,7 @@ export default function UsersPage() {
                                 className={`px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md ${
                                   currentPage === pageNum
                                     ? 'bg-blue-500 text-white border-blue-500'
-                                    : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                    : 'bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700'
                                 }`}
                               >
                                 {pageNum}
@@ -601,7 +601,7 @@ export default function UsersPage() {
                     <button
                       onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      className="px-2 sm:px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-2 sm:px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <span className="hidden sm:inline">Next</span>
                       <span className="sm:hidden">›</span>
@@ -667,7 +667,7 @@ export default function UsersPage() {
                         setEditingUser(null)
                         resetForm()
                       }}
-                      className="flex-1 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                      className="flex-1 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                     >
                       Cancel
                     </button>
@@ -898,7 +898,7 @@ function BulkImportModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                className="flex-1 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               >
                 Cancel
               </button>

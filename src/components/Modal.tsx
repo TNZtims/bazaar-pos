@@ -187,22 +187,22 @@ export const ConfirmationModal = ({
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2">
+          <h3 className="text-lg font-semibold text-slate-100 mb-2">
             {title}
           </h3>
-          <p className="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-line">
+          <p className="text-sm text-slate-400 whitespace-pre-line">
             {message}
           </p>
         </div>
       </div>
 
-      <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+      <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-slate-700">
         <button
           onClick={onClose}
           disabled={loading}
-          className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-700 
-                   border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 
-                   focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800
+          className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-700 
+                   border border-slate-600 rounded-lg hover:bg-slate-600 
+                   focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800
                    disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {cancelText}
@@ -211,7 +211,7 @@ export const ConfirmationModal = ({
           onClick={onConfirm}
           disabled={loading}
           className={`px-4 py-2 text-sm font-medium text-white rounded-lg 
-                    focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-800
+                    focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800
                     disabled:opacity-50 disabled:cursor-not-allowed transition-colors
                     ${config.buttonBg} ${loading ? 'cursor-wait' : ''}`}
         >

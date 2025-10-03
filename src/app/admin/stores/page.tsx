@@ -475,8 +475,8 @@ export default function AdminStoresPage() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Store Management</h1>
-              <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Create and manage stores in the system</p>
+              <h1 className="text-2xl font-bold text-slate-100">Store Management</h1>
+              <p className="mt-1 text-sm text-slate-400">Create and manage stores in the system</p>
             </div>
             
             <button
@@ -491,44 +491,44 @@ export default function AdminStoresPage() {
           </div>
 
           {/* Stores List */}
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+          <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700">
             {stores.length === 0 && !loading ? (
-              <div className="p-8 text-center text-gray-500 dark:text-slate-400">
+              <div className="p-8 text-center text-slate-400">
                 No stores found. Create your first store!
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
+                <table className="min-w-full divide-y divide-slate-700">
                   <thead className="bg-gray-50 dark:bg-slate-700">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Store Name
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Type
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Public Access
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Cashiers
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Created
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                  <tbody className="bg-slate-800 divide-y divide-slate-700">
                     {stores.map((store) => (
-                      <tr key={store._id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                      <tr key={store._id} className="hover:bg-slate-700">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                          <div className="text-sm font-medium text-slate-100">
                             {store.storeName}
                           </div>
                         </td>
@@ -598,10 +598,10 @@ export default function AdminStoresPage() {
                             }
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">
                           {store.cashiers.length > 0 ? store.cashiers.join(', ') : 'None'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-slate-400">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                           {new Date(store.createdAt).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
@@ -638,14 +638,14 @@ export default function AdminStoresPage() {
           {/* Create Store Modal */}
           {showCreateModal && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-slate-800 rounded-xl max-w-md w-full p-6 border border-gray-200 dark:border-slate-700 shadow-2xl">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">
+              <div className="bg-slate-800 rounded-xl max-w-md w-full p-6 border border-slate-700 shadow-2xl">
+                <h2 className="text-lg font-semibold text-slate-100 mb-4">
                   Create New Store
                 </h2>
                 
                 <form onSubmit={handleCreateStore} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
                       Store Name *
                     </label>
                     <input
@@ -653,14 +653,14 @@ export default function AdminStoresPage() {
                       required
                       value={formData.storeName}
                       onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Enter store name"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
                         Password *
                       </label>
                       <input
@@ -668,12 +668,12 @@ export default function AdminStoresPage() {
                         required
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Password"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
                         Confirm Password *
                       </label>
                       <input
@@ -681,21 +681,21 @@ export default function AdminStoresPage() {
                         required
                         value={formData.confirmPassword}
                         onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Confirm password"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
                       Cashiers (comma-separated)
                     </label>
                     <input
                       type="text"
                       value={formData.cashiers}
                       onChange={(e) => setFormData({ ...formData, cashiers: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="John Doe, Jane Smith"
                     />
                   </div>
@@ -708,7 +708,7 @@ export default function AdminStoresPage() {
                       onChange={(e) => setFormData({ ...formData, isAdmin: e.target.checked })}
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
-                    <label htmlFor="isAdmin" className="ml-2 block text-sm text-gray-700 dark:text-slate-300">
+                    <label htmlFor="isAdmin" className="ml-2 block text-sm text-slate-300">
                       Create as Admin Store
                     </label>
                   </div>
@@ -717,7 +717,7 @@ export default function AdminStoresPage() {
                     <button
                       type="button"
                       onClick={() => setShowCreateModal(false)}
-                      className="px-4 py-2 text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors flex items-center gap-2"
+                      className="px-4 py-2 text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors flex items-center gap-2"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -755,14 +755,14 @@ export default function AdminStoresPage() {
           {/* Edit Store Modal */}
           {showEditModal && editingStore && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-slate-800 rounded-xl max-w-2xl w-full p-6 border border-gray-200 dark:border-slate-700 shadow-2xl max-h-[90vh] overflow-y-auto">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">
+              <div className="bg-slate-800 rounded-xl max-w-2xl w-full p-6 border border-slate-700 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <h2 className="text-lg font-semibold text-slate-100 mb-4">
                   Edit Store: {editingStore.storeName}
                 </h2>
                 
                 <form onSubmit={handleUpdateStore} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
                       Store Name *
                     </label>
                     <input
@@ -770,33 +770,33 @@ export default function AdminStoresPage() {
                       required
                       value={formData.storeName}
                       onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Enter store name"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
                         New Password (optional)
                       </label>
                       <input
                         type="password"
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Leave empty to keep current"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
                         Confirm New Password
                       </label>
                       <input
                         type="password"
                         value={formData.confirmPassword}
                         onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Confirm new password"
                         disabled={!formData.password}
                       />
@@ -804,21 +804,21 @@ export default function AdminStoresPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
                       Cashiers (comma-separated)
                     </label>
                     <input
                       type="text"
                       value={formData.cashiers}
                       onChange={(e) => setFormData({ ...formData, cashiers: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="John Doe, Jane Smith"
                     />
                   </div>
 
                   {/* Banner Image Upload */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
                       Store Banner Image
                     </label>
                     <div className="space-y-2">
@@ -827,7 +827,7 @@ export default function AdminStoresPage() {
                           <img 
                             src={formData.bannerImageUrl} 
                             alt="Banner preview" 
-                            className="w-full h-24 object-cover rounded-md border border-gray-300 dark:border-slate-600"
+                            className="w-full h-24 object-cover rounded-md border border-slate-600"
                             onError={(e) => {
                               console.log('Banner image failed to load:', formData.bannerImageUrl)
                               // Don't hide the container, just show a placeholder
@@ -850,11 +850,11 @@ export default function AdminStoresPage() {
                         </div>
                       )}
                       {(!formData.bannerImageUrl || formData.bannerImageUrl === '') && (
-                        <div className="border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-md p-4 text-center">
+                        <div className="border-2 border-dashed border-slate-600 rounded-md p-4 text-center">
                           <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2z" />
                           </svg>
-                          <p className="text-sm text-gray-500 dark:text-slate-400">No banner image uploaded</p>
+                          <p className="text-sm text-slate-400">No banner image uploaded</p>
                         </div>
                       )}
                       <input
@@ -864,7 +864,7 @@ export default function AdminStoresPage() {
                           const file = e.target.files?.[0]
                           if (file) handleImageUpload(file, 'banner')
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                         disabled={uploadingBanner}
                       />
                       {uploadingBanner && (
@@ -875,7 +875,7 @@ export default function AdminStoresPage() {
 
                   {/* Logo Image Upload */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
                       Store Logo Image
                     </label>
                     <div className="space-y-2">
@@ -884,7 +884,7 @@ export default function AdminStoresPage() {
                           <img 
                             src={formData.logoImageUrl} 
                             alt="Logo preview" 
-                            className="w-20 h-20 object-cover rounded-full border border-gray-300 dark:border-slate-600"
+                            className="w-20 h-20 object-cover rounded-full border border-slate-600"
                             onError={(e) => {
                               console.log('Logo image failed to load:', formData.logoImageUrl)
                               // Show a placeholder circle
@@ -907,14 +907,14 @@ export default function AdminStoresPage() {
                         </div>
                       )}
                       {(!formData.logoImageUrl || formData.logoImageUrl === '') && (
-                        <div className="border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-2">
+                        <div className="border-2 border-dashed border-slate-600 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-2">
                           <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                           </svg>
                         </div>
                       )}
                       {(!formData.logoImageUrl || formData.logoImageUrl === '') && (
-                        <p className="text-sm text-gray-500 dark:text-slate-400 text-center mb-2">No logo image uploaded</p>
+                        <p className="text-sm text-slate-400 text-center mb-2">No logo image uploaded</p>
                       )}
                       <input
                         type="file"
@@ -923,7 +923,7 @@ export default function AdminStoresPage() {
                           const file = e.target.files?.[0]
                           if (file) handleImageUpload(file, 'logo')
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                         disabled={uploadingLogo}
                       />
                       {uploadingLogo && (
@@ -934,13 +934,13 @@ export default function AdminStoresPage() {
 
                   {/* QR Code Upload Section */}
                   <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-slate-100 border-b border-gray-200 dark:border-slate-600 pb-2">
+                    <h3 className="text-lg font-medium text-slate-100 border-b border-gray-200 dark:border-slate-600 pb-2">
                       Payment QR Codes
                     </h3>
                     
                     {/* GCash QR Code */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
                         GCash QR Code
                       </label>
                       <div className="space-y-2">
@@ -949,7 +949,7 @@ export default function AdminStoresPage() {
                             <img 
                               src={formData.qrCodes.gcash} 
                               alt="GCash QR Code" 
-                              className="w-32 h-32 object-cover rounded-md border border-gray-300 dark:border-slate-600"
+                              className="w-32 h-32 object-cover rounded-md border border-slate-600"
                             />
                             <button
                               type="button"
@@ -984,7 +984,7 @@ export default function AdminStoresPage() {
                             if (file) handleQRCodeUpload(file, 'gcash')
                           }}
                           disabled={uploadingQRCodes.gcash}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                         {uploadingQRCodes.gcash && (
                           <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
@@ -1000,7 +1000,7 @@ export default function AdminStoresPage() {
 
                     {/* GoTyme QR Code */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
                         GoTyme QR Code
                       </label>
                       <div className="space-y-2">
@@ -1009,7 +1009,7 @@ export default function AdminStoresPage() {
                             <img 
                               src={formData.qrCodes.gotyme} 
                               alt="GoTyme QR Code" 
-                              className="w-32 h-32 object-cover rounded-md border border-gray-300 dark:border-slate-600"
+                              className="w-32 h-32 object-cover rounded-md border border-slate-600"
                             />
                             <button
                               type="button"
@@ -1044,7 +1044,7 @@ export default function AdminStoresPage() {
                             if (file) handleQRCodeUpload(file, 'gotyme')
                           }}
                           disabled={uploadingQRCodes.gotyme}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                         {uploadingQRCodes.gotyme && (
                           <p className="text-sm text-green-600 dark:text-green-400 mt-2">
@@ -1060,7 +1060,7 @@ export default function AdminStoresPage() {
 
                     {/* BPI QR Code */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
                         BPI QR Code
                       </label>
                       <div className="space-y-2">
@@ -1069,7 +1069,7 @@ export default function AdminStoresPage() {
                             <img 
                               src={formData.qrCodes.bpi} 
                               alt="BPI QR Code" 
-                              className="w-32 h-32 object-cover rounded-md border border-gray-300 dark:border-slate-600"
+                              className="w-32 h-32 object-cover rounded-md border border-slate-600"
                             />
                             <button
                               type="button"
@@ -1104,7 +1104,7 @@ export default function AdminStoresPage() {
                             if (file) handleQRCodeUpload(file, 'bpi')
                           }}
                           disabled={uploadingQRCodes.bpi}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-50 file:text-red-700 hover:file:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-50 file:text-red-700 hover:file:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                         {uploadingQRCodes.bpi && (
                           <p className="text-sm text-red-600 dark:text-red-400 mt-2">
@@ -1127,7 +1127,7 @@ export default function AdminStoresPage() {
                       onChange={(e) => setFormData({ ...formData, isAdmin: e.target.checked })}
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
-                    <label htmlFor="editIsAdmin" className="ml-2 block text-sm text-gray-700 dark:text-slate-300">
+                    <label htmlFor="editIsAdmin" className="ml-2 block text-sm text-slate-300">
                       Admin Store
                     </label>
                   </div>
@@ -1140,7 +1140,7 @@ export default function AdminStoresPage() {
                         setEditingStore(null)
                         resetForm()
                       }}
-                      className="px-4 py-2 text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors flex items-center gap-2"
+                      className="px-4 py-2 text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 transition-colors flex items-center gap-2"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

@@ -35,12 +35,42 @@ app.prepare().then(() => {
 
   // Store connections by store ID for targeted broadcasts
   const storeConnections = new Map()
+  // Store user info by socket ID
+  const userInfo = new Map()
+
+  // Function to broadcast online users info to a store
+  const broadcastOnlineUsers = (storeId) => {
+    const connections = storeConnections.get(storeId)
+    if (!connections) return
+    
+    const users = Array.from(connections).map(socketId => {
+      const info = userInfo.get(socketId)
+      return info ? {
+        socketId,
+        name: info.name,
+        avatar: info.avatar
+      } : {
+        socketId,
+        name: 'Anonymous',
+        avatar: null
+      }
+    })
+    
+    io.to(`store-${storeId}`).emit('online-users-update', {
+      type: 'online-users-update',
+      count: users.length,
+      users: users
+    })
+    
+    console.log(`📊 Store ${storeId}: ${users.length} users online`, users.map(u => u.name))
+  }
 
   io.on('connection', (socket) => {
     console.log('Client connected:', socket.id)
 
     // Join store-specific room
-    socket.on('join-store', (storeId) => {
+    socket.on('join-store', (data) => {
+      const { storeId, userName, userAvatar } = data
       const roomName = `store-${storeId}`
       socket.join(roomName)
       
@@ -49,7 +79,52 @@ app.prepare().then(() => {
       }
       storeConnections.get(storeId).add(socket.id)
       
-      console.log(`Socket ${socket.id} joined store ${storeId}`)
+      // Store user info
+      userInfo.set(socket.id, {
+        name: userName || 'Anonymous',
+        avatar: userAvatar || null,
+        storeId: storeId
+      })
+      
+      console.log(`Socket ${socket.id} joined store ${storeId} as ${userName || 'Anonymous'}`)
+      
+      // Broadcast updated online users info
+      broadcastOnlineUsers(storeId)
+    })
+
+    // Handle online users info request
+    socket.on('get-online-users', (data) => {
+      const { storeId } = data
+      if (storeId) {
+        const connections = storeConnections.get(storeId)
+        if (!connections) {
+          socket.emit('online-users-update', {
+            type: 'online-users-update',
+            count: 0,
+            users: []
+          })
+          return
+        }
+        
+        const users = Array.from(connections).map(socketId => {
+          const info = userInfo.get(socketId)
+          return info ? {
+            socketId,
+            name: info.name,
+            avatar: info.avatar
+          } : {
+            socketId,
+            name: 'Anonymous',
+            avatar: null
+          }
+        })
+        
+        socket.emit('online-users-update', {
+          type: 'online-users-update',
+          count: users.length,
+          users: users
+        })
+      }
     })
 
     // Handle inventory updates
@@ -105,13 +180,27 @@ app.prepare().then(() => {
     socket.on('disconnect', () => {
       console.log('Client disconnected:', socket.id)
       
-      // Clean up store connections
-      storeConnections.forEach((connections, storeId) => {
-        connections.delete(socket.id)
-        if (connections.size === 0) {
-          storeConnections.delete(storeId)
+      // Get user info before cleanup
+      const user = userInfo.get(socket.id)
+      const storeId = user?.storeId
+      
+      // Clean up user info
+      userInfo.delete(socket.id)
+      
+      // Clean up store connections and broadcast updated info
+      if (storeId) {
+        const connections = storeConnections.get(storeId)
+        if (connections && connections.has(socket.id)) {
+          connections.delete(socket.id)
+          
+          // Broadcast updated online users info
+          broadcastOnlineUsers(storeId)
+          
+          if (connections.size === 0) {
+            storeConnections.delete(storeId)
+          }
         }
-      })
+      }
     })
   })
 

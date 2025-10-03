@@ -1139,7 +1139,7 @@ export default function SalesPage() {
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Create a Sale</h1>
+                <h1 className="text-2xl font-bold text-slate-100">Create a Sale</h1>
                 <WebSocketStatus
                   isConnected={isWebSocketConnected}
                   connectionQuality={connectionQuality}
@@ -1147,7 +1147,7 @@ export default function SalesPage() {
                   reconnectAttempts={reconnectAttempts}
                 />
               </div>
-              <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Add products to cart and process sales</p>
+              <p className="mt-1 text-sm text-slate-400">Add products to cart and process sales</p>
             </div>
             {/* Empty space to ensure cart button doesn't overlap */}
             <div className="w-16 sm:w-20"></div>
@@ -1175,14 +1175,14 @@ export default function SalesPage() {
           
           {/* Cart Total (shown when items in cart) */}
           {cart.length > 0 && (
-            <div className="absolute top-12 sm:top-14 right-0 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 px-2 py-1 rounded-lg shadow-lg text-xs sm:text-sm font-medium border border-gray-200 dark:border-slate-700 whitespace-nowrap">
+            <div className="absolute top-12 sm:top-14 right-0 bg-slate-800 text-slate-100 px-2 py-1 rounded-lg shadow-lg text-xs sm:text-sm font-medium border border-slate-700 whitespace-nowrap">
               ₱{cart.reduce((sum, item) => sum + (getEffectivePrice(item.product) * item.quantity), 0).toFixed(2)}
             </div>
           )}
         </div>
 
         {/* Enhanced Search Section */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-4">
+        <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700 p-4">
           <div className="flex items-center justify-between gap-4">
             {/* Search Bar */}
             <div className="flex-1 max-w-md">
@@ -1197,7 +1197,7 @@ export default function SalesPage() {
                   placeholder="Search products by name or description..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-10 py-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm"
+                  className="w-full pl-10 pr-10 py-3 border border-slate-600 rounded-lg bg-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm"
                 />
                 {searchTerm && (
                   <button
@@ -1212,7 +1212,7 @@ export default function SalesPage() {
                 )}
               </div>
               {searchTerm && (
-                <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
+                <p className="mt-2 text-xs text-slate-400">
                   Searching for "{searchTerm}"...
                 </p>
               )}
@@ -1249,9 +1249,9 @@ export default function SalesPage() {
         </div>
 
         {/* Products Grid */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+        <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700">
           {products.length === 0 && !loading ? (
-            <div className="p-8 text-center text-gray-500 dark:text-slate-400">
+            <div className="p-8 text-center text-slate-400">
               <div className="flex flex-col items-center gap-3">
                 <svg className="h-12 w-12 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -1520,7 +1520,7 @@ export default function SalesPage() {
               {/* Product Count Info */}
               {totalProducts > 0 && (
                 <div className="border-t border-gray-200 dark:border-slate-600 px-4 py-4">
-                  <div className="text-sm text-gray-600 dark:text-slate-400 text-center">
+                  <div className="text-sm text-slate-400 text-center">
                     Showing all {totalProducts} products
                   </div>
                 </div>
@@ -1552,7 +1552,7 @@ export default function SalesPage() {
           <div className="space-y-6">
             {/* Customer Name Field */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
                 Customer Name
               </label>
               <input
@@ -1560,7 +1560,7 @@ export default function SalesPage() {
                 placeholder="Enter customer name (optional)"
                 value={saleData.customerName}
                 onChange={(e) => setSaleData({ ...saleData, customerName: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-slate-600 rounded-lg bg-slate-700 text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -1569,7 +1569,7 @@ export default function SalesPage() {
                 <svg className="w-16 h-16 text-gray-300 dark:text-slate-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.1 5M7 13l-1.1 5m0 0h9.1M17 21a2 2 0 100-4 2 2 0 000 4zM9 21a2 2 0 100-4 2 2 0 000 4z" />
                 </svg>
-                <p className="text-gray-500 dark:text-slate-400 text-lg">Your cart is empty</p>
+                <p className="text-slate-400 text-lg">Your cart is empty</p>
                 <p className="text-gray-400 dark:text-slate-500 text-sm mt-2">Add some products to get started</p>
               </div>
             ) : (
@@ -1579,8 +1579,8 @@ export default function SalesPage() {
                   {cart.map((item) => (
                     <div key={item.product._id} className="flex items-center space-x-4 p-4 bg-gray-50 dark:bg-slate-700 rounded-lg">
                       <div className="flex-1">
-                        <h4 className="font-medium text-gray-900 dark:text-slate-100 text-lg">{item.product.name}</h4>
-                        <p className="text-gray-600 dark:text-slate-400">
+                        <h4 className="font-medium text-slate-100 text-lg">{item.product.name}</h4>
+                        <p className="text-slate-400">
                           {item.product.discountPrice && item.product.discountPrice > 0 ? (
                             <>
                               <span className="line-through text-xs">₱{item.product.price.toFixed(2)}</span>
@@ -1594,14 +1594,14 @@ export default function SalesPage() {
                       <div className="flex items-center space-x-3">
                         <button
                           onClick={() => updateCartQuantity(item.product._id, item.quantity - 1)}
-                          className="w-8 h-8 flex items-center justify-center border border-gray-300 dark:border-slate-600 rounded-lg text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
+                          className="w-8 h-8 flex items-center justify-center border border-slate-600 rounded-lg text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
                         >
                           -
                         </button>
-                        <span className="w-12 text-center text-gray-900 dark:text-slate-100 font-medium">{item.quantity}</span>
+                        <span className="w-12 text-center text-slate-100 font-medium">{item.quantity}</span>
                         <button
                           onClick={() => updateCartQuantity(item.product._id, item.quantity + 1)}
-                          className="w-8 h-8 flex items-center justify-center border border-gray-300 dark:border-slate-600 rounded-lg text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
+                          className="w-8 h-8 flex items-center justify-center border border-slate-600 rounded-lg text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
                         >
                           +
                         </button>
@@ -1622,21 +1622,21 @@ export default function SalesPage() {
                 <div className="border-t border-gray-200 dark:border-slate-600 pt-6 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Discount (₱)</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Discount (₱)</label>
                       <input
                         type="number"
                         step="0.01"
                         value={saleData.discount}
                         onChange={(e) => setSaleData({ ...saleData, discount: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-lg bg-slate-700 text-slate-100 focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Payment</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Payment</label>
                       <select
                         value={saleData.paymentStatus}
                         onChange={(e) => setSaleData({ ...saleData, paymentStatus: e.target.value as 'paid' | 'partial' | 'pending' })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-lg bg-slate-700 text-slate-100 focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="paid">Pay Full</option>
                         <option value="partial">Partial</option>
@@ -1648,7 +1648,7 @@ export default function SalesPage() {
                   {/* Amount Paid (for partial payments) */}
                   {saleData.paymentStatus === 'partial' && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
                         Amount Paid *
                       </label>
                       <input
@@ -1664,11 +1664,11 @@ export default function SalesPage() {
                             amountPaid: value === '' ? 0 : parseFloat(value) || 0 
                           })
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-lg bg-slate-700 text-slate-100 focus:ring-2 focus:ring-blue-500"
                         placeholder="Enter amount received"
                         required
                       />
-                      <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+                      <p className="text-sm text-slate-400 mt-1">
                         Remaining: ₱{Math.max(0, total - saleData.amountPaid).toFixed(2)}
                       </p>
                     </div>
@@ -1677,14 +1677,14 @@ export default function SalesPage() {
                   {/* Due Date (for partial and pending payments) */}
                   {(saleData.paymentStatus === 'partial' || saleData.paymentStatus === 'pending') && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
                         Due Date
                       </label>
                       <input
                         type="date"
                         value={saleData.dueDate}
                         onChange={(e) => setSaleData({ ...saleData, dueDate: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-lg bg-slate-700 text-slate-100 focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                   )}
@@ -1706,7 +1706,7 @@ export default function SalesPage() {
                   {/* Total and Actions */}
                   <div className="border-t border-gray-200 dark:border-slate-600 pt-4">
                     <div className="flex justify-between items-center mb-4">
-                      <span className="text-xl font-semibold text-gray-900 dark:text-slate-100">Total:</span>
+                      <span className="text-xl font-semibold text-slate-100">Total:</span>
                       <span className="text-xl font-bold text-blue-600 dark:text-blue-400">₱{total.toFixed(2)}</span>
                     </div>
                     
@@ -1762,10 +1762,10 @@ export default function SalesPage() {
 
             {/* Cart Summary */}
             <div className="text-center">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2">
+              <h3 className="text-lg font-semibold text-slate-100 mb-2">
                 You have {cart.length} item(s) in your cart
               </h3>
-              <p className="text-gray-600 dark:text-slate-400 mb-4">
+              <p className="text-slate-400 mb-4">
                 {cartWarningModal.message}
               </p>
               
@@ -1774,8 +1774,8 @@ export default function SalesPage() {
                 <div className="space-y-2">
                   {cart.slice(0, 3).map((item) => (
                     <div key={item.product._id} className="flex justify-between text-sm">
-                      <span className="text-gray-700 dark:text-slate-300">{item.product.name}</span>
-                      <span className="text-gray-600 dark:text-slate-400">x{item.quantity}</span>
+                      <span className="text-slate-300">{item.product.name}</span>
+                      <span className="text-slate-400">x{item.quantity}</span>
                     </div>
                   ))}
                   {cart.length > 3 && (
@@ -1831,10 +1831,10 @@ export default function SalesPage() {
 
             {/* Warning Content */}
             <div className="text-center">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2">
+              <h3 className="text-lg font-semibold text-slate-100 mb-2">
                 Are you sure you want to refresh?
               </h3>
-              <p className="text-gray-600 dark:text-slate-400 mb-4">
+              <p className="text-slate-400 mb-4">
                 You have {cart.length} item(s) in your cart. If you refresh the page, your cart will be cleared and you'll lose these items.
               </p>
               
@@ -1843,8 +1843,8 @@ export default function SalesPage() {
                 <div className="space-y-2">
                   {cart.slice(0, 3).map((item) => (
                     <div key={item.product._id} className="flex justify-between text-sm">
-                      <span className="text-gray-700 dark:text-slate-300">{item.product.name}</span>
-                      <span className="text-gray-600 dark:text-slate-400">x{item.quantity}</span>
+                      <span className="text-slate-300">{item.product.name}</span>
+                      <span className="text-slate-400">x{item.quantity}</span>
                     </div>
                   ))}
                   {cart.length > 3 && (
@@ -1932,13 +1932,13 @@ export default function SalesPage() {
         {/* Product Image Modal */}
         {selectedImageProduct && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedImageProduct(null)}>
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-6xl w-full max-h-[85vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-slate-800 rounded-xl shadow-2xl max-w-6xl w-full max-h-[85vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
               {/* Modal Header */}
-              <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-600">
-                <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-100 truncate pr-4">
+              <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-600">
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-100 truncate pr-4">
                   {selectedImageProduct.name}
                 </h3>
-                <button onClick={() => setSelectedImageProduct(null)} className="flex-shrink-0 p-2 text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-700 rounded-full transition-all duration-200">
+                <button onClick={() => setSelectedImageProduct(null)} className="flex-shrink-0 p-2 text-gray-400 hover:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-700 rounded-full transition-all duration-200">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -1959,7 +1959,7 @@ export default function SalesPage() {
                 </div>
                 
                 {/* Details Section - Right Side */}
-                <div className="flex-1 p-4 sm:p-6 overflow-y-auto bg-white dark:bg-slate-800">
+                <div className="flex-1 p-4 sm:p-6 overflow-y-auto bg-slate-800">
                   <div className="space-y-6">
                     {/* Price Badge */}
                     <div className="flex items-center gap-3">
@@ -1997,21 +1997,21 @@ export default function SalesPage() {
                     {/* Product Details */}
                     <div className="space-y-4">
                       <div>
-                        <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-3 flex items-center">
+                        <h4 className="text-lg font-semibold text-slate-100 mb-3 flex items-center">
                           <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                           Product Information
                         </h4>
                         <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4 space-y-2">
-                          <p className="text-gray-700 dark:text-slate-300">
-                            <span className="font-semibold text-gray-900 dark:text-slate-100">Name:</span> {selectedImageProduct.name}
+                          <p className="text-slate-300">
+                            <span className="font-semibold text-slate-100">Name:</span> {selectedImageProduct.name}
                           </p>
-                          <p className="text-gray-700 dark:text-slate-300">
-                            <span className="font-semibold text-gray-900 dark:text-slate-100">Availability:</span> {getActualAvailableQuantity(selectedImageProduct)} units available
+                          <p className="text-slate-300">
+                            <span className="font-semibold text-slate-100">Availability:</span> {getActualAvailableQuantity(selectedImageProduct)} units available
                           </p>
                           {/* Sales-Specific Information */}
                           {cart.find(item => item.product._id === selectedImageProduct._id) && (
-                            <p className="text-gray-700 dark:text-slate-300">
-                              <span className="font-semibold text-gray-900 dark:text-slate-100">In Cart:</span> {cart.find(item => item.product._id === selectedImageProduct._id)?.quantity} items
+                            <p className="text-slate-300">
+                              <span className="font-semibold text-slate-100">In Cart:</span> {cart.find(item => item.product._id === selectedImageProduct._id)?.quantity} items
                             </p>
                           )}
                         </div>
@@ -2019,12 +2019,12 @@ export default function SalesPage() {
                       
                       {selectedImageProduct.description && (
                         <div>
-                          <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-3 flex items-center">
+                          <h4 className="text-lg font-semibold text-slate-100 mb-3 flex items-center">
                             <svg className="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             Description
                           </h4>
                           <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4">
-                            <p className="text-gray-700 dark:text-slate-300 leading-relaxed">
+                            <p className="text-slate-300 leading-relaxed">
                               {selectedImageProduct.description}
                             </p>
                           </div>

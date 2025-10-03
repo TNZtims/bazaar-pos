@@ -227,8 +227,8 @@ export default function AuditTrailPage() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Audit Trail</h1>
-              <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Track all product stock movements across stores</p>
+              <h1 className="text-2xl font-bold text-slate-100">Audit Trail</h1>
+              <p className="mt-1 text-sm text-slate-400">Track all product stock movements across stores</p>
             </div>
             
             {/* Quick Actions */}
@@ -267,19 +267,19 @@ export default function AuditTrailPage() {
 
           {/* Advanced Filters */}
           {showFilters && (
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+            <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700 p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
 
                 {/* Store Filter (Admin only) */}
                 {isAdmin && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
                       Store
                     </label>
                     <select
                       value={storeFilter}
                       onChange={(e) => setStoreFilter(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">All Stores</option>
                       {availableStores.map((store) => (
@@ -293,13 +293,13 @@ export default function AuditTrailPage() {
 
                 {/* Action Filter */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Action Type
                   </label>
                   <select
                     value={actionFilter}
                     onChange={(e) => setActionFilter(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">All Actions</option>
                     <option value="sale">Sale</option>
@@ -314,34 +314,34 @@ export default function AuditTrailPage() {
 
                 {/* Date From */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Date From
                   </label>
                   <input
                     type="date"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 {/* Date To */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Date To
                   </label>
                   <input
                     type="date"
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
               {/* Quick Date Filters */}
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-600">
-                <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Quick Date Filters:</p>
+                <p className="text-sm font-medium text-slate-300 mb-2">Quick Date Filters:</p>
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={setTodayFilter}
@@ -367,16 +367,16 @@ export default function AuditTrailPage() {
           )}
 
           {/* Audit Logs Table */}
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+          <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700">
             {auditLogs.length === 0 && !loading ? (
-              <div className="p-8 text-center text-gray-500 dark:text-slate-400">
+              <div className="p-8 text-center text-slate-400">
                 No audit logs found.
               </div>
             ) : (
               <>
                 {/* Desktop Table */}
                 <div className="hidden md:block">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
+                  <table className="min-w-full divide-y divide-slate-700">
                     <thead className="bg-gray-50 dark:bg-slate-700">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-300 uppercase tracking-wider">
@@ -402,19 +402,19 @@ export default function AuditTrailPage() {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                    <tbody className="bg-slate-800 divide-y divide-slate-700">
                       {auditLogs.map((log) => (
-                        <tr key={log._id} className="hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
+                        <tr key={log._id} className="hover:bg-slate-700 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">
                             {formatDate(log.createdAt)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">
                             <div className="font-medium">{log.productName}</div>
                             {log.productId?.sku && (
-                              <div className="text-gray-500 dark:text-slate-400 text-xs">SKU: {log.productId.sku}</div>
+                              <div className="text-slate-400 text-xs">SKU: {log.productId.sku}</div>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">
                             {log.storeName}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -428,13 +428,13 @@ export default function AuditTrailPage() {
                               {log.quantityChange > 0 ? '+' : ''}{log.quantityChange}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">
                             <div className="text-xs">
                               <div>Before: {log.previousQuantity}</div>
                               <div>After: {log.newQuantity}</div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-slate-100">
+                          <td className="px-6 py-4 text-sm text-slate-100">
                             <div className="space-y-1">
                               {log.customerName && (
                                 <div className="text-xs">
@@ -467,11 +467,11 @@ export default function AuditTrailPage() {
                 {/* Mobile Cards */}
                 <div className="md:hidden space-y-4 p-4">
                   {auditLogs.map((log) => (
-                    <div key={log._id} className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-white dark:bg-slate-700">
+                    <div key={log._id} className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-slate-700">
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <p className="font-medium text-gray-900 dark:text-slate-100">{log.productName}</p>
-                          <p className="text-sm text-gray-600 dark:text-slate-400">{formatDate(log.createdAt)}</p>
+                          <p className="font-medium text-slate-100">{log.productName}</p>
+                          <p className="text-sm text-slate-400">{formatDate(log.createdAt)}</p>
                         </div>
                         <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${getActionColor(log.action)}`}>
                           <span className="mr-1">{getActionIcon(log.action)}</span>
@@ -480,35 +480,35 @@ export default function AuditTrailPage() {
                       </div>
                       
                       <div className="space-y-1 mb-3">
-                        <p className="text-sm text-gray-900 dark:text-slate-100">
+                        <p className="text-sm text-slate-100">
                           Store: {log.storeName}
                         </p>
-                        <p className="text-sm text-gray-900 dark:text-slate-100">
+                        <p className="text-sm text-slate-100">
                           Quantity Change: <span className={`font-medium ${log.quantityChange > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                             {log.quantityChange > 0 ? '+' : ''}{log.quantityChange}
                           </span>
                         </p>
-                        <p className="text-sm text-gray-900 dark:text-slate-100">
+                        <p className="text-sm text-slate-100">
                           Stock: {log.previousQuantity} → {log.newQuantity}
                         </p>
                         
                         {log.customerName && (
-                          <p className="text-sm text-gray-900 dark:text-slate-100">
+                          <p className="text-sm text-slate-100">
                             Customer: {log.customerName}
                           </p>
                         )}
                         {log.cashier && (
-                          <p className="text-sm text-gray-900 dark:text-slate-100">
+                          <p className="text-sm text-slate-100">
                             Cashier: {log.cashier}
                           </p>
                         )}
                         {log.reason && (
-                          <p className="text-sm text-gray-900 dark:text-slate-100">
+                          <p className="text-sm text-slate-100">
                             Reason: {log.reason}
                           </p>
                         )}
                         {log.orderId && (
-                          <p className="text-sm text-gray-900 dark:text-slate-100">
+                          <p className="text-sm text-slate-100">
                             Order: #{log.orderId.slice(-6)}
                           </p>
                         )}
@@ -522,9 +522,9 @@ export default function AuditTrailPage() {
 
           {/* Pagination */}
           {totalLogs > 0 && (
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 px-6 py-4">
+            <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700 px-6 py-4">
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div className="text-sm text-gray-700 dark:text-slate-300">
+                <div className="text-sm text-slate-300">
                   Showing <span className="font-medium">{startIndex}</span> to <span className="font-medium">{endIndex}</span> of{' '}
                   <span className="font-medium">{totalLogs.toLocaleString()}</span> audit logs
                 </div>
@@ -536,7 +536,7 @@ export default function AuditTrailPage() {
                       setItemsPerPage(Number(e.target.value))
                       setCurrentPage(1)
                     }}
-                    className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   >
                     <option value={10}>10 per page</option>
                     <option value={25}>25 per page</option>
@@ -548,7 +548,7 @@ export default function AuditTrailPage() {
                   <button
                     onClick={() => setCurrentPage(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-slate-400 bg-slate-700 border border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -577,7 +577,7 @@ export default function AuditTrailPage() {
                           className={`relative inline-flex items-center px-3 py-2 text-sm font-medium border rounded-md transition-colors ${
                             currentPage === pageNum
                               ? 'bg-blue-600 text-white border-blue-600'
-                              : 'text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+                              : 'text-slate-400 bg-slate-700 border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
                           }`}
                         >
                           {pageNum}
@@ -590,7 +590,7 @@ export default function AuditTrailPage() {
                   <button
                     onClick={() => setCurrentPage(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-slate-400 bg-slate-700 border border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Next
                     <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

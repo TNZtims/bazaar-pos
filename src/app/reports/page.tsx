@@ -415,28 +415,28 @@ export default function ReportsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Reports & Analytics</h1>
-            <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Sales performance and insights</p>
+            <h1 className="text-2xl font-bold text-slate-100">Reports & Analytics</h1>
+            <p className="mt-1 text-sm text-slate-400">Sales performance and insights</p>
           </div>
         </div>
 
         {/* Floating Loader Overlay */}
         {loading && (
           <div className="fixed inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 mx-4 max-w-sm w-full border border-gray-200 dark:border-slate-700">
+            <div className="bg-slate-800 rounded-2xl shadow-2xl p-8 mx-4 max-w-sm w-full border border-slate-700">
               {/* Modern Loading Spinner */}
               <div className="flex flex-col items-center">
                 <div className="relative">
-                  <div className="w-16 h-16 border-4 border-gray-200 dark:border-slate-700 rounded-full animate-spin border-t-blue-600 dark:border-t-blue-400"></div>
+                  <div className="w-16 h-16 border-4 border-slate-700 rounded-full animate-spin border-t-blue-600 dark:border-t-blue-400"></div>
                   <div className="absolute inset-0 w-16 h-16 border-4 border-transparent rounded-full animate-ping border-t-blue-600/20 dark:border-t-blue-400/20"></div>
                 </div>
                 
                 {/* Loading Text */}
                 <div className="mt-6 text-center">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2">
+                  <h3 className="text-lg font-semibold text-slate-100 mb-2">
                     Updating Reports
                   </h3>
-                  <p className="text-sm text-gray-600 dark:text-slate-400">
+                  <p className="text-sm text-slate-400">
                     Applying filters and refreshing data...
                   </p>
                 </div>
@@ -462,46 +462,46 @@ export default function ReportsPage() {
         />
 
         {/* Product Performance Controls */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+        <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700 p-6">
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Product Performance Controls</h3>
-                <p className="text-sm text-gray-600 dark:text-slate-400">Filter and analyze product sales data</p>
+                <h3 className="text-lg font-semibold text-slate-100">Product Performance Controls</h3>
+                <p className="text-sm text-slate-400">Filter and analyze product sales data</p>
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                 {/* Date Range Filters */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Date From
                   </label>
                   <input
                     type="date"
                     value={dateFrom}
                     onChange={(e) => handleDateFromChange(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Date To
                   </label>
                   <input
                     type="date"
                     value={dateTo}
                     onChange={(e) => handleDateToChange(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                   />
                 </div>
 
                 {/* Product Filter */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Product
                   </label>
                   <select
                     value={filterProduct}
                     onChange={(e) => setFilterProduct(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={productOptionsLoading}
                   >
                     <option value="all">All Products</option>
@@ -515,13 +515,13 @@ export default function ReportsPage() {
 
                 {/* Category Filter */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Category
                   </label>
                   <select
                     value={filterCategory}
                     onChange={(e) => setFilterCategory(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {categories.map(category => (
                       <option key={category} value={category}>
@@ -533,14 +533,14 @@ export default function ReportsPage() {
 
                 {/* Seller Filter - Modern Dropdown with Checkboxes */}
                 <div className="relative seller-dropdown">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Sellers ({filterSeller.length} selected)
                   </label>
                   
                   {/* Dropdown Button */}
                   <button
                     onClick={() => sellerDropdownOpen ? handleSellerDropdownClose() : handleSellerDropdownOpen()}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between"
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between"
                     disabled={sellersLoading}
                   >
                     <span className="truncate">
@@ -568,11 +568,11 @@ export default function ReportsPage() {
 
                   {/* Dropdown Menu */}
                   {sellerDropdownOpen && (
-                    <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                    <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-700 border border-slate-600 rounded-md shadow-lg max-h-60 overflow-auto">
                       {/* Header with Select All / Clear All */}
                       <div className="px-3 py-2 border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-600">
                         <div className="flex justify-between items-center">
-                          <span className="text-xs font-medium text-gray-700 dark:text-slate-300">
+                          <span className="text-xs font-medium text-slate-300">
                             {sellers.length} sellers available
                           </span>
                           <div className="flex gap-2">
@@ -599,7 +599,7 @@ export default function ReportsPage() {
                         {sellers.map(seller => (
                           <label
                             key={seller.name}
-                            className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600 cursor-pointer"
+                            className="flex items-center px-3 py-2 hover:bg-slate-600 cursor-pointer"
                           >
                             <input
                               type="checkbox"
@@ -614,10 +614,10 @@ export default function ReportsPage() {
                               className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                             />
                             <div className="ml-3 flex-1">
-                              <span className="text-sm text-gray-900 dark:text-slate-100 font-medium">
+                              <span className="text-sm text-slate-100 font-medium">
                                 {seller.name}
                               </span>
-                              <span className="text-xs text-gray-500 dark:text-slate-400 ml-1">
+                              <span className="text-xs text-slate-400 ml-1">
                                 ({seller.productCount} products)
                               </span>
                             </div>
@@ -625,13 +625,13 @@ export default function ReportsPage() {
                         ))}
                         
                         {sellers.length === 0 && !sellersLoading && (
-                          <div className="px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">
+                          <div className="px-3 py-4 text-center text-sm text-slate-400">
                             No sellers found
                           </div>
                         )}
                         
                         {sellersLoading && (
-                          <div className="px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">
+                          <div className="px-3 py-4 text-center text-sm text-slate-400">
                             Loading sellers...
                           </div>
                         )}
@@ -684,13 +684,13 @@ export default function ReportsPage() {
 
                 {/* Payment Status Filter */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Payment Status
                   </label>
                   <select
                     value={filterPaymentStatus}
                     onChange={(e) => setFilterPaymentStatus(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="all">All Status</option>
                     <option value="paid">Paid</option>
@@ -703,22 +703,22 @@ export default function ReportsPage() {
             </div>
 
         {/* Enhanced Top Products Table - Full Width */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 relative">
+        <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700 relative">
           {/* Table Loading Overlay */}
           {productsLoading && (
-            <div className="absolute inset-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-slate-700">
+            <div className="absolute inset-0 bg-slate-800/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+              <div className="bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-700">
                 <div className="flex flex-col items-center">
                   <div className="relative">
-                    <div className="w-12 h-12 border-4 border-gray-200 dark:border-slate-700 rounded-full animate-spin border-t-blue-600 dark:border-t-blue-400"></div>
-                    <div className="absolute inset-0 w-12 h-12 border-4 border-transparent rounded-full animate-pulse border-t-blue-600/30 dark:border-t-blue-400/30"></div>
+                    <div className="w-12 h-12 border-4 border-slate-700 rounded-full animate-spin border-t-blue-400"></div>
+                    <div className="absolute inset-0 w-12 h-12 border-4 border-transparent rounded-full animate-pulse border-t-blue-400/30"></div>
                   </div>
                   
                   <div className="mt-4 text-center">
-                    <p className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                    <p className="text-sm font-medium text-slate-100">
                       Updating Products
                     </p>
-                    <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
+                    <p className="text-xs text-slate-400 mt-1">
                       Applying filters...
                     </p>
                   </div>
@@ -727,11 +727,11 @@ export default function ReportsPage() {
             </div>
           )}
 
-          <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+          <div className="p-6 border-b border-slate-700">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">All Products Performance</h2>
-                <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
+                <h2 className="text-xl font-semibold text-slate-100">All Products Performance</h2>
+                <p className="mt-1 text-sm text-slate-400">
                   Complete overview of all products with completed paid sales for {formatDateRange()}
                 </p>
               </div>
@@ -750,7 +750,7 @@ export default function ReportsPage() {
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         placeholder="Search products..."
-                        className="pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
+                        className="pl-10 pr-4 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
                       />
                       {searchTerm && (
                         <button
@@ -793,17 +793,17 @@ export default function ReportsPage() {
           <div className="overflow-x-auto">
             {totalProducts === 0 ? (
               <div className="text-center py-12">
-                <div className="text-gray-500 dark:text-slate-400">
+                <div className="text-slate-400">
                   <div className="text-4xl mb-4">📦</div>
                   <p className="text-lg font-medium">No products found</p>
                   <p className="text-sm">Try adjusting your filters or add some products to your inventory</p>
                 </div>
               </div>
             ) : (
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
-                    <thead className="bg-gray-50 dark:bg-slate-700">
+                  <table className="min-w-full divide-y divide-slate-700">
+                    <thead className="bg-slate-700">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                           <button
                             onClick={() => handleSort('productName')}
                             className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-slate-200"
@@ -816,19 +816,19 @@ export default function ReportsPage() {
                             )}
                           </button>
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                           Category
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                           Seller
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                           Current Stock
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                           Price
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                           <button
                             onClick={() => handleSort('totalQuantitySold')}
                             className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-slate-200"
@@ -841,10 +841,10 @@ export default function ReportsPage() {
                             )}
                           </button>
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                           Sales Count
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                           <button
                             onClick={() => handleSort('totalRevenue')}
                             className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-slate-200"
@@ -857,7 +857,7 @@ export default function ReportsPage() {
                             )}
                           </button>
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                           <button
                             onClick={() => handleSort('profit')}
                             className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-slate-200"
@@ -870,19 +870,19 @@ export default function ReportsPage() {
                             )}
                           </button>
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                           Margin
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                           Last Sale
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                    <tbody className="bg-slate-800 divide-y divide-slate-700">
                       {paginatedProducts.map((product, index) => (
                         <tr 
                           key={product._id} 
-                          className={`hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${
+                          className={`hover:bg-slate-700 transition-colors ${
                             product.totalQuantitySold === 0 ? 'opacity-75' : ''
                           }`}
                         >
@@ -896,7 +896,7 @@ export default function ReportsPage() {
                             {startIndex + index + 1}
                           </div>
                           <div>
-                                <div className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                                <div className="text-sm font-medium text-slate-100">
                                   {product.productName}
                           </div>
                                 {product.totalQuantitySold === 0 && (
@@ -905,10 +905,10 @@ export default function ReportsPage() {
                         </div>
                       </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                             {product.category || 'Uncategorized'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                             {product.seller && product.seller !== 'N/A' ? (
                               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400">
                                 {product.seller}
@@ -928,16 +928,16 @@ export default function ReportsPage() {
                               {product.currentStock} units
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-slate-100">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-100">
                             {formatCurrency(product.price)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-slate-100">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-100">
                             {product.totalQuantitySold}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                             {product.salesCount}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-slate-100">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-100">
                             {formatCurrency(product.totalRevenue)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -950,7 +950,7 @@ export default function ReportsPage() {
                               {formatPercentage(product.profitMargin)}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                             {formatDate(product.lastSaleDate)}
                           </td>
                         </tr>
@@ -962,9 +962,9 @@ export default function ReportsPage() {
 
           {/* Pagination Controls */}
           {totalProducts > 0 && (
-                <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700">
+                <div className="px-6 py-4 border-t border-slate-700 bg-slate-700">
                   <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <div className="text-sm text-gray-700 dark:text-slate-300">
+                    <div className="text-sm text-slate-300">
                       Showing <span className="font-medium">{startIndex + 1}</span> to <span className="font-medium">{endIndex}</span> of{' '}
                       <span className="font-medium">{totalProducts}</span> products
                     </div>
@@ -972,11 +972,11 @@ export default function ReportsPage() {
                     <div className="flex items-center gap-2">
                       {/* Items per page selector */}
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-700 dark:text-slate-300">Show:</span>
+                        <span className="text-sm text-slate-300">Show:</span>
                         <select
                           value={itemsPerPage}
                           onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                          className="px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                          className="px-2 py-1 border border-slate-600 rounded text-sm bg-white dark:bg-slate-700 text-slate-100"
                         >
                           <option value={10}>10</option>
                           <option value={20}>20</option>
@@ -989,7 +989,7 @@ export default function ReportsPage() {
                       <button
                         onClick={() => handlePageChange(currentPage - 1)}
                         disabled={currentPage === 1}
-                        className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-slate-400 bg-white dark:bg-slate-700 border border-slate-600 rounded-md hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -1018,7 +1018,7 @@ export default function ReportsPage() {
                               className={`relative inline-flex items-center px-3 py-2 text-sm font-medium border rounded-md transition-colors ${
                                 currentPage === pageNum
                                   ? 'bg-blue-600 text-white border-blue-600'
-                                  : 'text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+                                  : 'text-slate-400 bg-white dark:bg-slate-700 border-slate-600 hover:bg-slate-600'
                               }`}
                             >
                               {pageNum}
@@ -1028,10 +1028,10 @@ export default function ReportsPage() {
                         
                         {totalPages > 5 && currentPage < totalPages - 2 && (
                           <>
-                            <span className="text-gray-500 dark:text-slate-400 px-2">...</span>
+                            <span className="text-slate-400 px-2">...</span>
                             <button
                               onClick={() => handlePageChange(totalPages)}
-                              className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
+                              className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-slate-400 bg-white dark:bg-slate-700 border border-slate-600 rounded-md hover:bg-slate-600 transition-colors"
                             >
                               {totalPages}
                             </button>
@@ -1043,7 +1043,7 @@ export default function ReportsPage() {
                       <button
                         onClick={() => handlePageChange(currentPage + 1)}
                         disabled={currentPage === totalPages}
-                        className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-slate-400 bg-white dark:bg-slate-700 border border-slate-600 rounded-md hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         Next
                         <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
