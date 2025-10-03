@@ -123,7 +123,10 @@ export default function PublicShopPage() {
 
     // Import socket.io-client dynamically
     import('socket.io-client').then(({ io }) => {
-      socket = io('http://localhost:3000')
+      // Get the current host and protocol for WebSocket connection
+      const wsUrl = `${window.location.protocol}//${window.location.host}`
+      console.log('🔌 Shop Page: WebSocket URL:', wsUrl)
+      socket = io(wsUrl)
       
       socket.on('connect', () => {
         console.log('Connected to Socket.IO for online users tracking')

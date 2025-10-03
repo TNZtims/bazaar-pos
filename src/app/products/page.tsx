@@ -399,6 +399,38 @@ export default function ProductsPage() {
     setSubmitting(true)
     
     try {
+      // Safety check: ensure editingProduct exists and has _id when updating
+      if (editingProduct && !editingProduct._id) {
+        console.error('❌ Editing product is missing _id:', editingProduct)
+        error('Error: Product ID is missing. Please try again.', 'Update Failed')
+        setSubmitting(false)
+        return
+      }
+
+      // Additional safety check: if we're in edit mode but editingProduct is null
+      if (showModal && editingProduct === null && formData.name) {
+        console.error('❌ Form is in edit mode but editingProduct is null')
+        error('Error: Product data is missing. Please close and reopen the edit form.', 'Update Failed')
+        setSubmitting(false)
+        return
+      }
+
+      // Validate required fields
+      if (!formData.name || !formData.price || !formData.quantity) {
+        console.error('❌ Missing required fields:', { name: formData.name, price: formData.price, quantity: formData.quantity })
+        error('Error: Please fill in all required fields (Name, Price, Quantity).', 'Validation Failed')
+        setSubmitting(false)
+        return
+      }
+
+      // Additional check: if we're updating but editingProduct is null, this is a state inconsistency
+      if (editingProduct === null && showModal) {
+        console.error('❌ State inconsistency: showModal is true but editingProduct is null')
+        error('Error: Form state is inconsistent. Please close and reopen the edit form.', 'State Error')
+        setSubmitting(false)
+        return
+      }
+
       const productData = {
         ...formData,
         cost: formData.cost && formData.cost.trim() !== '' ? parseFloat(formData.cost) : null,
@@ -412,6 +444,7 @@ export default function ProductsPage() {
       console.log('📦 Product data being sent:', productData)
       console.log('📦 Form data:', formData)
       console.log('📦 Editing product:', editingProduct ? 'Yes' : 'No')
+      console.log('📦 Editing product _id:', editingProduct?._id)
       console.log('📦 Discount validation check:', {
         discountPrice: productData.discountPrice,
         price: productData.price,
@@ -453,8 +486,24 @@ export default function ProductsPage() {
   }
 
   const handleEdit = (product: Product) => {
+    // Safety check: ensure product has _id
+    if (!product || !product._id) {
+      console.error('❌ Cannot edit product: missing _id', product)
+      error('Error: Product data is invalid. Please try again.', 'Edit Failed')
+      return
+    }
+
     // Get the most up-to-date product data from the current products state
     const currentProduct = products.find(p => p._id === product._id) || product
+    
+    // Double-check that we have a valid product
+    if (!currentProduct || !currentProduct._id) {
+      console.error('❌ Cannot edit product: current product missing _id', currentProduct)
+      error('Error: Product data is invalid. Please try again.', 'Edit Failed')
+      return
+    }
+    
+    console.log('📝 Editing product:', currentProduct.name, 'ID:', currentProduct._id)
     
     setEditingProduct(currentProduct)
     setFormData({
@@ -1288,7 +1337,7 @@ export default function ProductsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || (editingProduct && !editingProduct._id)}
                   className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                 >
                   {submitting ? (

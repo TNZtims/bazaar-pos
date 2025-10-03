@@ -4,7 +4,7 @@ const next = require('next')
 const { Server } = require('socket.io')
 
 const dev = process.env.NODE_ENV !== 'production'
-const hostname = 'localhost'
+const hostname = dev ? 'localhost' : '0.0.0.0'
 const port = process.env.PORT || 3000
 
 const app = next({ dev, hostname, port })
@@ -25,9 +25,12 @@ app.prepare().then(() => {
   // Initialize Socket.IO
   const io = new Server(httpServer, {
     cors: {
-      origin: "*",
-      methods: ["GET", "POST"]
-    }
+      origin: dev ? "*" : ["https://bzpos.outdoorequippedservice.com"],
+      methods: ["GET", "POST"],
+      credentials: true
+    },
+    transports: ['websocket', 'polling'],
+    allowEIO3: true
   })
 
   // Make io globally available for API routes
@@ -217,7 +220,9 @@ app.prepare().then(() => {
       console.error(err)
       process.exit(1)
     })
-    .listen(port, () => {
+    .listen(port, hostname, () => {
       console.log(`> Ready on http://${hostname}:${port}`)
+      console.log(`> Environment: ${dev ? 'development' : 'production'}`)
+      console.log(`> Socket.IO server initialized with CORS origin: ${dev ? '*' : 'https://bzpos.outdoorequippedservice.com'}`)
     })
 })
